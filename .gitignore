@@ -4,10 +4,13 @@
 *.xcbkptlist
 *.plist
 /build
-/dist
+**/dist/**
 /coverage
 *.sqlite
 *.a
 unittest
 /curl/src
 .vscode
+**/node_modules/**
+.env
+package-lock.json
