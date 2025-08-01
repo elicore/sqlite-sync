@@ -6,7 +6,7 @@
 #### SELECT
 
 ```sql
-auth_userid() = user_id OR json_extract(auth_json(), '$.name') = 'coach'
+auth_userid() = users.id OR json_extract(auth_json(), '$.name') = 'coach'
 ```
 
 #### INSERT
@@ -30,7 +30,7 @@ _No policy_
 #### SELECT
 
 ```sql
-auth_userid() = user_id OR json_extract(auth_json(), '$.name') = 'coach'
+auth_userid() = activities.user_id OR json_extract(auth_json(), '$.name') = 'coach'
 ```
 
 #### INSERT
@@ -56,7 +56,7 @@ auth_userid() = OLD.user_id OR json_extract(auth_json(), '$.name') = 'coach'
 #### SELECT
 
 ```sql
-auth_userid() = user_id OR json_extract(auth_json(), '$.name') = 'coach'
+auth_userid() = workouts.user_id OR json_extract(auth_json(), '$.name') = 'coach'
 ```
 
 #### INSERT
