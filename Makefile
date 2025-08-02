@@ -136,6 +136,16 @@ endif
     T_LDFLAGS += -fprofile-arcs -ftest-coverage
 endif
 
+# Native network support only for Apple platforms
+ifdef NATIVE_NETWORK
+	RELEASE_OBJ += $(patsubst %.m, $(BUILD_RELEASE)/%_m.o, $(notdir $(wildcard $(SRC_DIR)/*.m)))
+	LDFLAGS += -framework Foundation
+	CFLAGS += -DCLOUDSYNC_OMIT_CURL
+
+$(BUILD_RELEASE)/%_m.o: %.m
+	$(CC) $(CFLAGS) -O3 -fPIC -c $< -o $@
+endif
+
 # Windows .def file generation
 $(DEF_FILE):
 ifeq ($(PLATFORM),windows)
@@ -314,15 +324,15 @@ clean:
 help:
 	@echo "SQLite Sync Extension Makefile"
 	@echo "Usage:"
-	@echo "  make [PLATFORM=platform] [ARCH=arch] [ANDROID_NDK=\$$ANDROID_HOME/ndk/26.1.10909125] [target]"
+	@echo "  make [PLATFORM=platform] [ARCH=arch] [ANDROID_NDK=\$$ANDROID_HOME/ndk/26.1.10909125] [NATIVE_NETWORK=ON] [target]"
 	@echo ""
 	@echo "Platforms:"
 	@echo "  linux (default on Linux)"
-	@echo "  macos (default on macOS)"
+	@echo "  macos (default on macOS - can be compiled with native network support)"
 	@echo "  windows (default on Windows)"
 	@echo "  android (needs ARCH to be set to x86_64 or arm64-v8a and ANDROID_NDK to be set)"
-	@echo "  ios (only on macOS)"
-	@echo "  isim (only on macOS)"
+	@echo "  ios (only on macOS - can be compiled with native network support)"
+	@echo "  isim (only on macOS - can be compiled with native network support)"
 	@echo "  wasm (needs wabt[brew install wabt/sudo apt install wabt])"
 	@echo ""
 	@echo "Targets:"

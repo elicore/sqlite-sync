@@ -58,7 +58,7 @@ bool network_compute_endpoints (sqlite3_context *context, network_data *data, co
     }
     
     char *site_id = network_data_get_siteid(data);
-    char *port_or_default = (port) ? (char *)port.UTF8String : CLOUDSYNC_DEFAULT_ENDPOINT_PORT;
+    char *port_or_default = (port && strcmp(port.UTF8String, "8860") != 0) ? (char *)port.UTF8String : CLOUDSYNC_DEFAULT_ENDPOINT_PORT;
     
     NSString *check_endpoint = [NSString stringWithFormat:@"%s://%s:%s/%s%s/%s", scheme.UTF8String, host.UTF8String, port_or_default, CLOUDSYNC_ENDPOINT_PREFIX, database.UTF8String, site_id];
     NSString *upload_endpoint = [NSString stringWithFormat: @"%s://%s:%s/%s%s/%s/%s", scheme.UTF8String, host.UTF8String, port_or_default, CLOUDSYNC_ENDPOINT_PREFIX, database.UTF8String, site_id, CLOUDSYNC_ENDPOINT_UPLOAD];
@@ -188,7 +188,18 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     
     // return error
     NETWORK_RESULT result = {};
-    NSString *msg = (responseError) ? [responseError localizedDescription] : [NSString stringWithCString:"Unknown network URL" encoding:NSUTF8StringEncoding];
+    NSString *msg;
+    if (responseError) {
+        msg = [responseError localizedDescription];
+    } else if (responseData && [responseData length] > 0) {
+        // Use the actual response body as the error message
+        msg = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+        if (!msg) {
+            msg = [NSString stringWithCString:"Invalid error response encoding" encoding:NSUTF8StringEncoding];
+        }
+    } else {
+        msg = [NSString stringWithFormat:@"HTTP %ld error", (long)statusCode];
+    }
     result.code = CLOUDSYNC_NETWORK_ERROR;
     result.buffer = (char *)msg.UTF8String;
     result.xdata = (void *)CFBridgingRetain(msg);
