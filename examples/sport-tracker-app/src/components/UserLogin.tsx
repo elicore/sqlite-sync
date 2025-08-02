@@ -15,6 +15,7 @@ interface UserLoginProps {
   onLogout: () => Promise<void>;
   onUsersLoad: () => void;
   onRefresh: () => void;
+  onError?: (error: string) => void; // Optional error handler
 }
 
 const UserLogin: React.FC<UserLoginProps> = ({
@@ -24,6 +25,7 @@ const UserLogin: React.FC<UserLoginProps> = ({
   onLogout,
   onUsersLoad,
   onRefresh,
+  onError
 }) => {
   const { db } = useDatabase();
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -113,6 +115,7 @@ const UserLogin: React.FC<UserLoginProps> = ({
             error
           );
           console.warn("SQLite Sync: Falling back to local refresh only");
+          if(onError) onError("SQLite Sync - Failed to sync with SQLite Cloud: " + error);
         }
       } else {
         console.log(
