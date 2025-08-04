@@ -60,11 +60,7 @@ export class SQLiteSync {
       throw new Error("Database not available");
     }
 
-    try {
-      await this.db.sqliteSyncNetworkSync();
-    } catch (e) {
-      console.error("Error checking SQLite Sync changes:", e);
-    }
+    await this.db.sqliteSyncNetworkSync();
   }
 
   /**

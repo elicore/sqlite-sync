@@ -97,7 +97,6 @@ export class Database {
     return this.sendMessage("sqliteSyncSetToken", token);
   }
 
-
   async sqliteSyncNetworkSync(): Promise<void> {
     return this.sendMessage("sqliteSyncNetworkSync");
   }

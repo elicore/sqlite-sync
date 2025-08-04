@@ -1,3 +1,10 @@
+//
+//  wasm.c
+//  cloudsync
+//
+//  Created by Gioele Cantoni on 25/06/25.
+//
+
 #ifdef SQLITE_WASM_EXTRA_INIT
 #define CLOUDSYNC_OMIT_CURL
 
@@ -96,7 +103,6 @@ NETWORK_RESULT network_receive_buffer (network_data *data, const char *endpoint,
     }
     
     if (fetch->status >= 200 && fetch->status < 300) {
-        
         if (blen > 0 && buffer) {
             char *buf = (char*)malloc(blen + 1);
             if (buf) {
@@ -112,9 +118,18 @@ NETWORK_RESULT network_receive_buffer (network_data *data, const char *endpoint,
         result.code = CLOUDSYNC_NETWORK_ERROR;
         if (fetch->statusText && fetch->statusText[0]) {
             result.buffer = strdup(fetch->statusText);
+            result.blen = sizeof(fetch->statusText);
+            result.xfree = free;
+        } else if (blen > 0 && buffer) {
+            char *buf = (char*)malloc(blen + 1);
+            if (buf) {
+                memcpy(buf, buffer, blen);
+                buf[blen] = 0;
+                result.buffer = buf;
+                result.blen = blen;
+                result.xfree = free;
+            }
         }
-        result.blen = sizeof(fetch->statusText);
-        result.xfree = free;
     }
 
     // cleanup

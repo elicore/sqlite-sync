@@ -1,6 +1,6 @@
 //
 //  main.c
-//  sqlite-sync
+//  cloudsync
 //
 //  Created by Gioele Cantoni on 05/06/25.
 //  Set CONNECTION_STRING, APIKEY and WEBLITE environment variables before running this test.
@@ -358,6 +358,7 @@ void* worker(void* arg) {
 
 int main (void) {
     int rc = SQLITE_OK;
+    remove(DB_PATH); // remove the database file if it exists
     
     cloudsync_memory_init(1);
     

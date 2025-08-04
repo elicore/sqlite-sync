@@ -36,6 +36,7 @@ const AppContent: React.FC = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [sqliteSyncVersion, setSqliteSyncVersion] = useState<string>("");
   const [sqliteVersion, setSqliteVersion] = useState<string>("");
+  const [loginError, setLoginError] = useState<string>("");
 
   // Coach mode - true when logged in user is named "coach"
   const isCoachMode = (session: UserSession | null): boolean => {
@@ -392,6 +393,15 @@ const AppContent: React.FC = () => {
     );
   }
 
+  if (loginError) {
+    return (
+      <div className="error-container">
+        <h2>Login Error</h2>
+        <p>{loginError}</p>
+      </div>
+    );
+  }
+
   if (!isInitialized || loading) {
     return (
       <div className="loading-container">
@@ -425,6 +435,7 @@ const AppContent: React.FC = () => {
           onLogout={handleLogout}
           onUsersLoad={loadUsers}
           onRefresh={handleRefreshData}
+          onError={setLoginError}
         />
         <DatabaseStatus
           onCountsLoad={loadCounts}

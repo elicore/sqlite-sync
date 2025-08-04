@@ -1,6 +1,6 @@
 //
 //  network.m
-//  cloudsync_network_test
+//  cloudsync
 //
 //  Created by Marco Bambini on 23/05/25.
 //
@@ -58,7 +58,7 @@ bool network_compute_endpoints (sqlite3_context *context, network_data *data, co
     }
     
     char *site_id = network_data_get_siteid(data);
-    char *port_or_default = (port) ? (char *)port.UTF8String : CLOUDSYNC_DEFAULT_ENDPOINT_PORT;
+    char *port_or_default = (port && strcmp(port.UTF8String, "8860") != 0) ? (char *)port.UTF8String : CLOUDSYNC_DEFAULT_ENDPOINT_PORT;
     
     NSString *check_endpoint = [NSString stringWithFormat:@"%s://%s:%s/%s%s/%s", scheme.UTF8String, host.UTF8String, port_or_default, CLOUDSYNC_ENDPOINT_PREFIX, database.UTF8String, site_id];
     NSString *upload_endpoint = [NSString stringWithFormat: @"%s://%s:%s/%s%s/%s/%s", scheme.UTF8String, host.UTF8String, port_or_default, CLOUDSYNC_ENDPOINT_PREFIX, database.UTF8String, site_id, CLOUDSYNC_ENDPOINT_UPLOAD];
@@ -147,15 +147,19 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     }
 
     __block NSData *responseData = nil;
-    __block NSError *responseError = nil;
+    __block NSString *responseError = nil;
     __block NSInteger statusCode = 0;
+    __block NSInteger errorCode = 0;
 
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
 
     NSURLSession *session = [NSURLSession sharedSession];
     NSURLSessionDataTask *task = [session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         responseData = data;
-        responseError = error;
+        if (error) {
+            responseError = [error localizedDescription];
+            errorCode = [error code];
+        }
         if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
             statusCode = [(NSHTTPURLResponse *)response statusCode];
         }
@@ -166,9 +170,10 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
 
     if (!responseError && (statusCode >= 200 && statusCode < 300)) {
-        size_t len = [responseData length];
         // check if OK should be returned
-        if (len == 0) return (NETWORK_RESULT){CLOUDSYNC_NETWORK_OK, NULL, 0, NULL, NULL};
+        if (responseData == nil || [responseData length] == 0) {
+            return (NETWORK_RESULT){CLOUDSYNC_NETWORK_OK, NULL, 0, NULL, NULL};
+        }
         
         // otherwise return a buffer
         NETWORK_RESULT result = {};
@@ -181,18 +186,31 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
             result.buffer = (char *)responseData.bytes;
             result.xdata = (void *)CFBridgingRetain(responseData);
         }
-        result.blen = len;
+        result.blen = [responseData length];
         result.xfree = network_buffer_cleanup;
+        
         return result;
     }
     
     // return error
     NETWORK_RESULT result = {};
-    NSString *msg = (responseError) ? [responseError localizedDescription] : [NSString stringWithCString:"Unknown network URL" encoding:NSUTF8StringEncoding];
+    NSString *msg = nil;
+    if (responseError) {
+        msg = responseError;
+    } else if (responseData && [responseData length] > 0) {
+        // Use the actual response body as the error message
+        msg = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+        if (!msg) {
+            msg = [NSString stringWithFormat:@"HTTP %ld error", (long)statusCode];
+        }
+    } else {
+        msg = [NSString stringWithFormat:@"HTTP %ld error", (long)statusCode];
+    }
     result.code = CLOUDSYNC_NETWORK_ERROR;
     result.buffer = (char *)msg.UTF8String;
     result.xdata = (void *)CFBridgingRetain(msg);
     result.xfree = network_buffer_cleanup;
-    result.blen = (responseError) ? (size_t)responseError.code : (size_t)statusCode;
+    result.blen = responseError ? (size_t)errorCode : (size_t)statusCode;
+    
     return result;
 }
