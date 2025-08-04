@@ -143,7 +143,7 @@ ifdef NATIVE_NETWORK
 	CFLAGS += -DCLOUDSYNC_OMIT_CURL
 
 $(BUILD_RELEASE)/%_m.o: %.m
-	$(CC) $(CFLAGS) -O3 -fPIC -c $< -o $@
+	$(CC) $(CFLAGS) -fobjc-arc -O3 -fPIC -c $< -o $@
 endif
 
 # Windows .def file generation

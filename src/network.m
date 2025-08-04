@@ -155,8 +155,7 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
 
     NSURLSession *session = [NSURLSession sharedSession];
     NSURLSessionDataTask *task = [session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        // Retain data to not get it deallocated, release it before returning
-        responseData = [data retain];
+        responseData = data;
         if (error) {
             responseError = [error localizedDescription];
             errorCode = [error code];
@@ -171,10 +170,8 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
 
     if (!responseError && (statusCode >= 200 && statusCode < 300)) {
-        size_t len = [responseData length];
         // check if OK should be returned
-        if (len == 0) {
-            [responseData release];
+        if (responseData == nil || [responseData length] == 0) {
             return (NETWORK_RESULT){CLOUDSYNC_NETWORK_OK, NULL, 0, NULL, NULL};
         }
         
@@ -189,10 +186,9 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
             result.buffer = (char *)responseData.bytes;
             result.xdata = (void *)CFBridgingRetain(responseData);
         }
-        result.blen = len;
+        result.blen = [responseData length];
         result.xfree = network_buffer_cleanup;
         
-        [responseData release];
         return result;
     }
     
@@ -216,6 +212,5 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     result.xfree = network_buffer_cleanup;
     result.blen = responseError ? (size_t)errorCode : (size_t)statusCode;
     
-    [responseData release];
     return result;
 }
