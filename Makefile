@@ -310,6 +310,54 @@ endif
 	mv $(CURL_SRC)/lib/.libs/libcurl.a $(CURL_DIR)/$(PLATFORM)
 	rm -rf $(CURL_DIR)/src
 
+.NOTPARALLEL: %.dylib
+%.dylib:
+	rm -rf $(BUILD_DIRS) && $(MAKE) PLATFORM=$*
+	mv $(DIST_DIR)/cloudsync.dylib $(DIST_DIR)/$@
+
+define PLIST
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\
+<plist version=\"1.0\">\
+<dict>\
+<key>CFBundleDevelopmentRegion</key>\
+<string>en</string>\
+<key>CFBundleExecutable</key>\
+<string>cloudsync</string>\
+<key>CFBundleIdentifier</key>\
+<string>ai.sqlite.cloudsync</string>\
+<key>CFBundleInfoDictionaryVersion</key>\
+<string>6.0</string>\
+<key>CFBundlePackageType</key>\
+<string>FMWK</string>\
+<key>CFBundleSignature</key>\
+<string>????</string>\
+<key>CFBundleVersion</key>\
+<string>$(shell make version)</string>\
+<key>CFBundleShortVersionString</key>\
+<string>$(shell make version)</string>\
+<key>MinimumOSVersion</key>\
+<string>11.0</string>\
+</dict>\
+</plist>
+endef
+
+LIB_NAMES = ios.dylib isim.dylib macos.dylib
+FMWK_NAMES = ios-arm64 ios-arm64_x86_64-simulator macos-arm64_x86_64
+$(DIST_DIR)/%.xcframework: $(LIB_NAMES)
+	@$(foreach i,1 2 3,\
+		lib=$(word $(i),$(LIB_NAMES)); \
+		fmwk=$(word $(i),$(FMWK_NAMES)); \
+		mkdir -p $(DIST_DIR)/$$fmwk/cloudsync.framework; \
+		printf "$(PLIST)" > $(DIST_DIR)/$$fmwk/cloudsync.framework/Info.plist; \
+		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/cloudsync.framework/cloudsync; \
+		install_name_tool -id "@rpath/cloudsync.framework/cloudsync" $(DIST_DIR)/$$fmwk/cloudsync.framework/cloudsync; \
+	)
+	xcodebuild -create-xcframework $(foreach fmwk,$(FMWK_NAMES),-framework $(DIST_DIR)/$(fmwk)/cloudsync.framework) -output $@
+	rm -rf $(foreach fmwk,$(FMWK_NAMES),$(DIST_DIR)/$(fmwk))
+
+xcframework: $(DIST_DIR)/cloudsync.xcframework
+
 # Tools
 sqlite_version: 
 	@echo $(SQLITE_VERSION)
@@ -341,4 +389,4 @@ help:
 	@echo "  test [COVERAGE=true]	- Test the extension with optional coverage output"
 	@echo "  help      				- Display this help message"
 
-.PHONY: all clean test extension help
+.PHONY: all clean test extension help xcframework
