@@ -111,7 +111,7 @@ else ifeq ($(PLATFORM),ios)
     CFLAGS += -arch arm64 $(SDK)
     CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch arm64 -isysroot $$(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=11.0"
     STRIP = strip -x -S $@
-else ifeq ($(PLATFORM),isim)
+else ifeq ($(PLATFORM),ios-sim)
     TARGET := $(DIST_DIR)/cloudsync.dylib
     SDK := -isysroot $(shell xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0
     LDFLAGS += -arch x86_64 -arch arm64 -framework Security -framework CoreFoundation -dynamiclib $(SDK)
@@ -342,7 +342,7 @@ define PLIST
 </plist>
 endef
 
-LIB_NAMES = ios.dylib isim.dylib macos.dylib
+LIB_NAMES = ios.dylib ios-sim.dylib macos.dylib
 FMWK_NAMES = ios-arm64 ios-arm64_x86_64-simulator macos-arm64_x86_64
 $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 	@$(foreach i,1 2 3,\
@@ -380,7 +380,7 @@ help:
 	@echo "  windows (default on Windows)"
 	@echo "  android (needs ARCH to be set to x86_64 or arm64-v8a and ANDROID_NDK to be set)"
 	@echo "  ios (only on macOS - can be compiled with native network support)"
-	@echo "  isim (only on macOS - can be compiled with native network support)"
+	@echo "  ios-sim (only on macOS - can be compiled with native network support)"
 	@echo "  wasm (needs wabt[brew install wabt/sudo apt install wabt])"
 	@echo ""
 	@echo "Targets:"
