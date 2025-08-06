@@ -202,7 +202,6 @@ jobs:
               name=$(basename "$folder")
               if [[ "$name" != "github-pages" && "$name" != "cloudsync-wasm" ]]; then
                 zip -jq "${name}-${{ steps.tag.outputs.version }}.zip" "$folder"/*
-                tar -cJf "${name}-${{ steps.tag.outputs.version }}.tar.xz" -C "$folder" .
                 tar -czf "${name}-${{ steps.tag.outputs.version }}.tar.gz" -C "$folder" .
               fi
             fi
@@ -274,7 +273,6 @@ jobs:
           tag_name: ${{ steps.tag.outputs.version }}
           files: |
             cloudsync-*-${{ steps.tag.outputs.version }}.zip
-            cloudsync-*-${{ steps.tag.outputs.version }}.tar.xz
             cloudsync-*-${{ steps.tag.outputs.version }}.tar.gz
             sqlite-*-sync-${{ steps.tag.outputs.version }}-wasm.zip
           make_latest: true
