@@ -204,7 +204,7 @@ jobs:
             if [ -d "$folder" ]; then
               name=$(basename "$folder")
               if [[ "$name" != "github-pages" && "$name" != "cloudsync-wasm" ]]; then
-                zip -jq "${name}-${{ steps.tag.outputs.version }}.zip" "$folder"/*
+                (cd "$folder" && zip -rq "../../${name}-${{ steps.tag.outputs.version }}.zip" .)
                 tar -czf "${name}-${{ steps.tag.outputs.version }}.tar.gz" -C "$folder" .
               fi
             fi
