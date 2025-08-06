@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.name }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }} build${{ matrix.arch != 'arm64-v8a' && matrix.name != 'ios-sim' && matrix.name != 'ios' && matrix.name != 'wasm' && ' + test' || ''}}
+    name: ${{ matrix.name }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }} build${{ matrix.arch != 'arm64-v8a' && matrix.name != 'ios-sim' && matrix.name != 'ios' && matrix.name != 'wasm' && matrix.name != 'apple-xcframework' && ' + test' || ''}}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -46,6 +46,9 @@ jobs:
           - os: ubuntu-latest
             name: wasm
             make: PLATFORM=wasm
+          - os: macos-latest
+            name: apple-xcframework
+            make: xcframework
 
     defaults:
       run:
