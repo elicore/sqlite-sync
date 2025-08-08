@@ -23,11 +23,18 @@ export class SQLiteSync {
   }
 
   /**
-   * 
+   * Prepare the SQLite Sync network with the information 
+   * about the remote database using the SQLite Cloud Connection String.
    */
-  async initSQLiteSyncNetwork(): Promise<void> {
-    console.log("SQLite Sync - init network...", import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING);
-    await this.db.sqliteSyncInitNetwork(import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING);
+  async initializeNetwork(): Promise<void> {
+    console.log(
+      "SQLite Sync - Initialize network with connection string:",
+      import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING
+    );
+    await this.db.sqliteSyncInitNetwork(
+      import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING
+    );
+    console.log("SQLite Sync - Network initialized successfully");
   }
 
   /**
@@ -44,7 +51,8 @@ export class SQLiteSync {
       // Get valid token (from session or fetch new one)
       const token = await this.getValidToken(userId, name);
 
-      // Authenticate SQLite Sync with the token
+      // Authenticate SQLite Sync with the token.
+      // Set the token everytime it changes because missing or expired.
       await this.db.sqliteSyncSetToken(token);
       console.log("SQLite Sync setup completed with token for user:", name);
     } catch (error) {
@@ -118,7 +126,9 @@ export class SQLiteSync {
 
     const now = new Date();
     if (!token) {
-      console.log("SQLite Sync: No token available, requesting new one from API");
+      console.log(
+        "SQLite Sync: No token available, requesting new one from API"
+      );
       const tokenData = await this.fetchNewToken(userId, name);
       localStorage.setItem(
         SQLiteSync.TOKEN_KEY_PREFIX,

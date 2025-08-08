@@ -14,14 +14,14 @@ export const getSqliteSyncOperations = (db: any) => ({
     return version;
   },
 
+  /** 
+   * Prepare the SQLite Sync network with the information 
+   * about the remote database using the SQLite Cloud Connection String.
+   */
   sqliteSyncInitNetwork(connectionString: string) {
-    // Initialize SQLite Sync with the SQLite Cloud Connection String.
-    // On the SQLite Cloud Dashboard, enable OffSync (SQLite Sync) 
-    // on the remote database and copy the Connection String.
     db.exec(
       `SELECT cloudsync_network_init('${connectionString}')`
     );
-    console.log("SQLite Sync - init network done", connectionString);
   },
 
   /** Authorize SQLite Sync with the user's Access Token. */

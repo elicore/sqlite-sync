@@ -25,7 +25,7 @@ const UserLogin: React.FC<UserLoginProps> = ({
   onLogout,
   onUsersLoad,
   onRefresh,
-  onError
+  onError,
 }) => {
   const { db } = useDatabase();
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -75,12 +75,13 @@ const UserLogin: React.FC<UserLoginProps> = ({
 
     if (checked) {
       console.log("SQLite Sync enabled for user:", currentSession?.name);
+      await sqliteSync?.initializeNetwork();
     } else {
       console.log("SQLite Sync disabled");
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const selectedUser = users.find((user) => user.id === selectedUserId);
     if (selectedUser) {
       const session: UserSession = {
@@ -104,8 +105,6 @@ const UserLogin: React.FC<UserLoginProps> = ({
       // If SQLite Sync is enabled, sync with cloud before refreshing
       if (sqliteSyncEnabled && sqliteSync && currentSession) {
         try {
-          console.log("SQLite Sync - Starting init network...");
-          await sqliteSync.initSQLiteSyncNetwork();
           await sqliteSync.setupWithToken(currentSession);
 
           console.log("SQLite Sync - Starting sync...");
@@ -117,7 +116,8 @@ const UserLogin: React.FC<UserLoginProps> = ({
             error
           );
           console.warn("SQLite Sync: Falling back to local refresh only");
-          if(onError) onError("SQLite Sync - Failed to sync with SQLite Cloud: " + error);
+          if (onError)
+            onError("SQLite Sync - Failed to sync with SQLite Cloud: " + error);
         }
       } else {
         console.log(
