@@ -93,6 +93,10 @@ export class Database {
     return this.sendMessage("sqliteVersion");
   }
 
+  async sqliteSyncInitNetwork(connectionString: string): Promise<void> {
+    return this.sendMessage("sqliteSyncInitNetwork", connectionString);
+  }
+
   async sqliteSyncSetToken(token: string): Promise<void> {
     return this.sendMessage("sqliteSyncSetToken", token);
   }

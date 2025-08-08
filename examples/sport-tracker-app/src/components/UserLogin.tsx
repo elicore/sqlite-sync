@@ -104,6 +104,8 @@ const UserLogin: React.FC<UserLoginProps> = ({
       // If SQLite Sync is enabled, sync with cloud before refreshing
       if (sqliteSyncEnabled && sqliteSync && currentSession) {
         try {
+          console.log("SQLite Sync - Starting init network...");
+          await sqliteSync.initSQLiteSyncNetwork();
           await sqliteSync.setupWithToken(currentSession);
 
           console.log("SQLite Sync - Starting sync...");

@@ -22,6 +22,13 @@ export class SQLiteSync {
     this.db = db;
   }
 
+  /**
+   * 
+   */
+  async initSQLiteSyncNetwork(): Promise<void> {
+    console.log("SQLite Sync - init network...", import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING);
+    await this.db.sqliteSyncInitNetwork(import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING);
+  }
 
   /**
    * Sets up SQLite Sync using Access Tokens authentication for a specific user.

@@ -14,6 +14,16 @@ export const getSqliteSyncOperations = (db: any) => ({
     return version;
   },
 
+  sqliteSyncInitNetwork(connectionString: string) {
+    // Initialize SQLite Sync with the SQLite Cloud Connection String.
+    // On the SQLite Cloud Dashboard, enable OffSync (SQLite Sync) 
+    // on the remote database and copy the Connection String.
+    db.exec(
+      `SELECT cloudsync_network_init('${connectionString}')`
+    );
+    console.log("SQLite Sync - init network done", connectionString);
+  },
+
   /** Authorize SQLite Sync with the user's Access Token. */
   sqliteSyncSetToken(token: string) {
     db.exec(`SELECT cloudsync_network_set_token('${token}')`);
@@ -29,6 +39,12 @@ export const getSqliteSyncOperations = (db: any) => ({
   */
   sqliteSyncNetworkSync() {
     console.log("SQLite Sync - Starting sync...");
+    db.exec({
+      sql: "SELECT hex(cloudsync_siteid())",
+    callback: (row: any) => {
+        console.log("SQLite Sync - Device site_id: ", row[0]);
+      },
+    });
     db.exec("SELECT cloudsync_network_sync(1000, 2);");
     console.log("SQLite Sync - Sync completed");
   },
@@ -89,13 +105,4 @@ export const initSQLiteSync = (db: any) => {
   db.exec(`SELECT cloudsync_init('workouts');`);
   // ...or initialize all tables at once 
   //  db.exec('SELECT cloudsync_init("*");');
-
-  // Initialize SQLite Sync with the SQLite Cloud Connection String.
-  // On the SQLite Cloud Dashboard, enable OffSync (SQLite Sync) 
-  // on the remote database and copy the Connection String.
-  db.exec(
-    `SELECT cloudsync_network_init('${
-      import.meta.env.VITE_SQLITECLOUD_CONNECTION_STRING
-    }')`
-  );
 };
