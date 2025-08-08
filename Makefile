@@ -13,18 +13,18 @@ SQLITE_VERSION ?= 3.49.2
 
 # Set default platform if not specified
 ifeq ($(OS),Windows_NT)
-    PLATFORM := windows
-    HOST := windows
-    CPUS := $(shell powershell -Command "[Environment]::ProcessorCount")
+	PLATFORM := windows
+	HOST := windows
+	CPUS := $(shell powershell -Command "[Environment]::ProcessorCount")
 else
-    HOST = $(shell uname -s | tr '[:upper:]' '[:lower:]')
-    ifeq ($(HOST),darwin)
-        PLATFORM := macos
-        CPUS := $(shell sysctl -n hw.ncpu)
-    else
-        PLATFORM := $(HOST)
-        CPUS := $(shell nproc)
-    endif
+	HOST = $(shell uname -s | tr '[:upper:]' '[:lower:]')
+	ifeq ($(HOST),darwin)
+		PLATFORM := macos
+		CPUS := $(shell sysctl -n hw.ncpu)
+	else
+		PLATFORM := $(HOST)
+		CPUS := $(shell nproc)
+	endif
 endif
 
 # Speed up builds by using all available CPU cores
@@ -35,6 +35,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -Wno-unused-parameter -I$(SRC_DIR) -I$(SQLITE_DIR) -I$(CURL_DIR)/include
 T_CFLAGS = $(CFLAGS) -DSQLITE_CORE -DCLOUDSYNC_UNITTEST -DCLOUDSYNC_OMIT_NETWORK -DCLOUDSYNC_OMIT_PRINT_RESULT
 LDFLAGS = -L./$(CURL_DIR)/$(PLATFORM) -lcurl
+COVERAGE = false
 
 # Directories
 SRC_DIR = src
@@ -62,77 +63,75 @@ TEST_TARGET = $(patsubst %.c,$(DIST_DIR)/%$(EXE), $(notdir $(TEST_SRC)))
 
 # Platform-specific settings
 ifeq ($(PLATFORM),windows)
-    TARGET := $(DIST_DIR)/cloudsync.dll
-    LDFLAGS += -shared -lbcrypt -lcrypt32 -lsecur32 -lws2_32
-    T_LDFLAGS = -lws2_32 -lbcrypt
-    # Create .def file for Windows
-    DEF_FILE := $(BUILD_RELEASE)/cloudsync.def
-    CFLAGS += -DCURL_STATICLIB
-    CURL_CONFIG = --with-schannel CFLAGS="-DCURL_STATICLIB"
-    EXE = .exe
-    STRIP = strip --strip-unneeded $@
+	TARGET := $(DIST_DIR)/cloudsync.dll
+	LDFLAGS += -shared -lbcrypt -lcrypt32 -lsecur32 -lws2_32
+	T_LDFLAGS = -lws2_32 -lbcrypt
+	# Create .def file for Windows
+	DEF_FILE := $(BUILD_RELEASE)/cloudsync.def
+	CFLAGS += -DCURL_STATICLIB
+	CURL_CONFIG = --with-schannel CFLAGS="-DCURL_STATICLIB"
+	EXE = .exe
+	STRIP = strip --strip-unneeded $@
 else ifeq ($(PLATFORM),macos)
-    TARGET := $(DIST_DIR)/cloudsync.dylib
-    LDFLAGS += -arch x86_64 -arch arm64 -framework Security -dynamiclib -undefined dynamic_lookup
-    T_LDFLAGS = -framework Security
-    CFLAGS += -arch x86_64 -arch arm64
-    CURL_CONFIG = --with-secure-transport CFLAGS="-arch x86_64 -arch arm64"
-    STRIP = strip -x -S $@
+	TARGET := $(DIST_DIR)/cloudsync.dylib
+	LDFLAGS += -arch x86_64 -arch arm64 -framework Security -dynamiclib -undefined dynamic_lookup
+	T_LDFLAGS = -framework Security
+	CFLAGS += -arch x86_64 -arch arm64
+	CURL_CONFIG = --with-secure-transport CFLAGS="-arch x86_64 -arch arm64"
+	STRIP = strip -x -S $@
 else ifeq ($(PLATFORM),android)
-    # Set ARCH to find Android NDK's Clang compiler, the user should set the ARCH
-    ifeq ($(filter %,$(ARCH)),)
-        $(error "Android ARCH must be set to ARCH=x86_64 or ARCH=arm64-v8a")
-    endif
-    # Set ANDROID_NDK path to find android build tools
-    # e.g. on MacOS: export ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/25.2.9519653
-    ifeq ($(filter %,$(ANDROID_NDK)),)
-        $(error "Android NDK must be set")
-    endif
+	ifndef ARCH # Set ARCH to find Android NDK's Clang compiler, the user should set the ARCH
+		$(error "Android ARCH must be set to ARCH=x86_64 or ARCH=arm64-v8a")
+	endif
+	ifndef ANDROID_NDK # Set ANDROID_NDK path to find android build tools; e.g. on MacOS: export ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/25.2.9519653
+		$(error "Android NDK must be set")
+	endif
 
-    BIN = $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/bin
-    PATH := $(BIN):$(PATH)
+	BIN = $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/bin
+	PATH := $(BIN):$(PATH)
 
-    ifneq (,$(filter $(ARCH),arm64 arm64-v8a))
-        override ARCH := aarch64
-    endif
+	ifneq (,$(filter $(ARCH),arm64 arm64-v8a))
+		override ARCH := aarch64
+	endif
 
-    OPENSSL := $(BIN)/../sysroot/usr/include/openssl
-    CC = $(BIN)/$(ARCH)-linux-android26-clang
-    CURL_CONFIG = --host $(ARCH)-$(HOST)-android26 --with-openssl=$(BIN)/../sysroot/usr LIBS="-lssl -lcrypto" AR=$(BIN)/llvm-ar AS=$(BIN)/llvm-as CC=$(CC) CXX=$(BIN)/$(ARCH)-linux-android26-clang++ LD=$(BIN)/ld RANLIB=$(BIN)/llvm-ranlib STRIP=$(BIN)/llvm-strip
-    TARGET := $(DIST_DIR)/cloudsync.so
-    LDFLAGS += -shared -lcrypto -lssl
-    STRIP = $(BIN)/llvm-strip --strip-unneeded $@
+	OPENSSL := $(BIN)/../sysroot/usr/include/openssl
+	CC = $(BIN)/$(ARCH)-linux-android26-clang
+	CURL_CONFIG = --host $(ARCH)-$(HOST)-android26 --with-openssl=$(BIN)/../sysroot/usr LIBS="-lssl -lcrypto" AR=$(BIN)/llvm-ar AS=$(BIN)/llvm-as CC=$(CC) CXX=$(BIN)/$(ARCH)-linux-android26-clang++ LD=$(BIN)/ld RANLIB=$(BIN)/llvm-ranlib STRIP=$(BIN)/llvm-strip
+	TARGET := $(DIST_DIR)/cloudsync.so
+	LDFLAGS += -shared -lcrypto -lssl
+	STRIP = $(BIN)/llvm-strip --strip-unneeded $@
 else ifeq ($(PLATFORM),ios)
-    TARGET := $(DIST_DIR)/cloudsync.dylib
-    SDK := -isysroot $(shell xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=11.0
-    LDFLAGS += -framework Security -framework CoreFoundation -dynamiclib $(SDK)
-    T_LDFLAGS = -framework Security
-    CFLAGS += -arch arm64 $(SDK)
-    CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch arm64 -isysroot $$(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=11.0"
-    STRIP = strip -x -S $@
+	TARGET := $(DIST_DIR)/cloudsync.dylib
+	SDK := -isysroot $(shell xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=11.0
+	LDFLAGS += -framework Security -framework CoreFoundation -dynamiclib $(SDK)
+	T_LDFLAGS = -framework Security
+	CFLAGS += -arch arm64 $(SDK)
+	CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch arm64 -isysroot $$(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=11.0"
+	STRIP = strip -x -S $@
 else ifeq ($(PLATFORM),ios-sim)
-    TARGET := $(DIST_DIR)/cloudsync.dylib
-    SDK := -isysroot $(shell xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0
-    LDFLAGS += -arch x86_64 -arch arm64 -framework Security -framework CoreFoundation -dynamiclib $(SDK)
-    T_LDFLAGS = -framework Security
-    CFLAGS += -arch x86_64 -arch arm64 $(SDK)
-    CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch x86_64 -arch arm64 -isysroot $$(xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0"
+	TARGET := $(DIST_DIR)/cloudsync.dylib
+	SDK := -isysroot $(shell xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0
+	LDFLAGS += -arch x86_64 -arch arm64 -framework Security -framework CoreFoundation -dynamiclib $(SDK)
+	T_LDFLAGS = -framework Security
+	CFLAGS += -arch x86_64 -arch arm64 $(SDK)
+	CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch x86_64 -arch arm64 -isysroot $$(xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0"
+	STRIP = strip -x -S $@
 else ifeq ($(PLATFORM),wasm)
-    TARGET := $(DIST_DIR)/sqlite-wasm.zip
+	TARGET := $(DIST_DIR)/sqlite-wasm.zip
 else # linux
-    TARGET := $(DIST_DIR)/cloudsync.so
-    LDFLAGS += -shared -lssl -lcrypto
-    T_LDFLAGS += -lpthread
-    CURL_CONFIG = --with-openssl
-    STRIP = strip --strip-unneeded $@
+	TARGET := $(DIST_DIR)/cloudsync.so
+	LDFLAGS += -shared -lssl -lcrypto
+	T_LDFLAGS += -lpthread
+	CURL_CONFIG = --with-openssl
+	STRIP = strip --strip-unneeded $@
 endif
 
-ifdef COVERAGE
+ifneq ($(COVERAGE),false)
 ifneq (,$(filter $(platform),linux windows))
-    T_LDFLAGS += -lgcov
+	T_LDFLAGS += -lgcov
 endif
-    T_CFLAGS += -fprofile-arcs -ftest-coverage
-    T_LDFLAGS += -fprofile-arcs -ftest-coverage
+	T_CFLAGS += -fprofile-arcs -ftest-coverage
+	T_LDFLAGS += -fprofile-arcs -ftest-coverage
 endif
 
 # Native network support only for Apple platforms
@@ -165,10 +164,10 @@ ifneq ($(PLATFORM),wasm)
 $(TARGET): $(RELEASE_OBJ) $(DEF_FILE) $(CURL_LIB)
 	$(CC) $(RELEASE_OBJ) $(DEF_FILE) -o $@ $(LDFLAGS)
 ifeq ($(PLATFORM),windows)
-    # Generate import library for Windows
+	# Generate import library for Windows
 	dlltool -D $@ -d $(DEF_FILE) -l $(DIST_DIR)/cloudsync.lib
 endif
-    # Strip debug symbols
+	# Strip debug symbols
 	$(STRIP)
 else
 #WASM build
@@ -206,7 +205,7 @@ $(BUILD_TEST)/%.o: %.c
 test: $(TARGET) $(TEST_TARGET)
 	$(SQLITE3) ":memory:" -cmd ".bail on" ".load ./$<" "SELECT cloudsync_version();"
 	set -e; for t in $(TEST_TARGET); do ./$$t; done
-ifdef COVERAGE
+ifneq ($(COVERAGE),false)
 	mkdir -p $(COV_DIR)
 	lcov --capture --directory . --output-file $(COV_DIR)/coverage.info $(subst src, --include src,${COV_FILES})
 	genhtml $(COV_DIR)/coverage.info --output-directory $(COV_DIR)
@@ -217,9 +216,9 @@ $(OPENSSL):
 
 	cd $(CURL_DIR)/src/openssl && \
 	./Configure android-$(if $(filter aarch64,$(ARCH)),arm64,$(ARCH)) \
-	    --prefix=$(BIN)/../sysroot/usr \
-	    no-shared no-unit-test \
-	    -D__ANDROID_API__=26 && \
+		--prefix=$(BIN)/../sysroot/usr \
+		no-shared no-unit-test \
+		-D__ANDROID_API__=26 && \
 	$(MAKE) && $(MAKE) install_sw
 
 ifeq ($(PLATFORM),android)
@@ -230,11 +229,11 @@ endif
 	mkdir -p $(CURL_DIR)/src
 	curl -L -o $(CURL_DIR)/src/curl.zip "https://github.com/curl/curl/releases/download/curl-$(subst .,_,${CURL_VERSION})/curl-$(CURL_VERSION).zip"
 
-    ifeq ($(HOST),windows)
+	ifeq ($(HOST),windows)
 	powershell -Command "Expand-Archive -Path '$(CURL_DIR)\src\curl.zip' -DestinationPath '$(CURL_DIR)\src\'"
-    else
+	else
 	unzip $(CURL_DIR)/src/curl.zip -d $(CURL_DIR)/src/.
-    endif
+	endif
 	
 	cd $(CURL_SRC) && ./configure \
 	--without-libpsl \
@@ -347,15 +346,15 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 	@$(foreach i,1 2 3,\
 		lib=$(word $(i),$(LIB_NAMES)); \
 		fmwk=$(word $(i),$(FMWK_NAMES)); \
-		mkdir -p $(DIST_DIR)/$$fmwk/cloudsync.framework; \
-		printf "$(PLIST)" > $(DIST_DIR)/$$fmwk/cloudsync.framework/Info.plist; \
-		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/cloudsync.framework/cloudsync; \
-		install_name_tool -id "@rpath/cloudsync.framework/cloudsync" $(DIST_DIR)/$$fmwk/cloudsync.framework/cloudsync; \
+		mkdir -p $(DIST_DIR)/$$fmwk/CloudSync.framework; \
+		printf "$(PLIST)" > $(DIST_DIR)/$$fmwk/CloudSync.framework/Info.plist; \
+		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \
+		install_name_tool -id "@rpath/CloudSync.framework/cloudsync" $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \
 	)
-	xcodebuild -create-xcframework $(foreach fmwk,$(FMWK_NAMES),-framework $(DIST_DIR)/$(fmwk)/cloudsync.framework) -output $@
+	xcodebuild -create-xcframework $(foreach fmwk,$(FMWK_NAMES),-framework $(DIST_DIR)/$(fmwk)/CloudSync.framework) -output $@
 	rm -rf $(foreach fmwk,$(FMWK_NAMES),$(DIST_DIR)/$(fmwk))
 
-xcframework: $(DIST_DIR)/cloudsync.xcframework
+xcframework: $(DIST_DIR)/CloudSync.xcframework
 
 # Tools
 sqlite_version: 
@@ -383,9 +382,9 @@ help:
 	@echo "  wasm (needs wabt[brew install wabt/sudo apt install wabt])"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all       				- Build the extension (default)"
-	@echo "  clean     				- Remove built files"
-	@echo "  test [COVERAGE=ON]		- Test the extension with optional coverage output"
-	@echo "  help      				- Display this help message"
+	@echo "  all	   				- Build the extension (default)"
+	@echo "  clean	 				- Remove built files"
+	@echo "  test [COVERAGE=true]	- Test the extension with optional coverage output"
+	@echo "  help	  				- Display this help message"
 
 .PHONY: all clean test extension help xcframework

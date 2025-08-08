@@ -61,7 +61,7 @@ jobs:
 
     defaults:
       run:
-        shell: ${{ contains(matrix.container, 'alpine') && 'sh' || 'bash' }}
+        shell: ${{ matrix.container && 'sh' || 'bash' }}
 
     env:
       CONNECTION_STRING: ${{ secrets.CONNECTION_STRING }}
@@ -92,6 +92,7 @@ jobs:
       
       - name: linux-musl arm64 setup container
         if: matrix.name == 'linux-musl' && matrix.arch == 'arm64'
+        id: musl-arm64
         run: |
           docker run -d --name alpine \
             --platform linux/arm64 \
@@ -114,7 +115,7 @@ jobs:
         run: sudo apt install wabt
 
       - name: build sqlite-sync
-        run: ${{ matrix.name == 'linux-musl' && matrix.arch == 'arm64' && 'docker exec alpine' || '' }} make extension ${{ matrix.make && matrix.make || ''}}
+        run: ${{ steps.musl-arm64 && 'docker exec alpine' || '' }} make extension ${{ matrix.make && matrix.make || ''}}
 
       - name: android setup test environment
         if: matrix.name == 'android' && matrix.arch != 'arm64-v8a'
@@ -161,7 +162,7 @@ jobs:
 
       - name: test sqlite-sync
         if: contains(matrix.name, 'linux') || matrix.name == 'windows' || matrix.name == 'macos'
-        run: ${{ matrix.name == 'linux-musl' && matrix.arch == 'arm64' && 'docker exec alpine' || '' }} make test ${{ matrix.make && matrix.make || ''}}
+        run: ${{ steps.musl-arm64 && 'docker exec alpine' || '' }} make test ${{ matrix.make && matrix.make || ''}}
 
       - uses: actions/upload-pages-artifact@v3.0.1
         if: matrix.name == 'macos'
