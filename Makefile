@@ -346,7 +346,8 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 	@$(foreach i,1 2 3,\
 		lib=$(word $(i),$(LIB_NAMES)); \
 		fmwk=$(word $(i),$(FMWK_NAMES)); \
-		mkdir -p $(DIST_DIR)/$$fmwk/CloudSync.framework; \
+		mkdir -p $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers; \
+		cp src/cloudsync.h src/sqlite3ext.h $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers/; \
 		printf "$(PLIST)" > $(DIST_DIR)/$$fmwk/CloudSync.framework/Info.plist; \
 		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \
 		install_name_tool -id "@rpath/CloudSync.framework/cloudsync" $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \

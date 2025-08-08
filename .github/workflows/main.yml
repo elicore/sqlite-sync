@@ -172,7 +172,7 @@ jobs:
         if: always()
         with:
           name: cloudsync-${{ matrix.name }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }}
-          path: dist/${{ matrix.name == 'wasm' && 'sqlite-wasm.zip' || 'cloudsync.*'}}
+          path: dist/${{ matrix.name == 'wasm' && 'sqlite-wasm.zip' || matrix.name == 'apple-xcframework' && 'CloudSync.xcframework' || 'cloudsync.*'}}
           if-no-files-found: error
 
   release:
@@ -298,5 +298,7 @@ jobs:
           files: |
             cloudsync-*-${{ steps.tag.outputs.version }}.zip
             cloudsync-*-${{ steps.tag.outputs.version }}.tar.gz
+            CloudSync-*-${{ steps.tag.outputs.version }}.zip
+            CloudSync-*-${{ steps.tag.outputs.version }}.tar.gz
             sqlite-*-sync-${{ steps.tag.outputs.version }}-wasm.zip
           make_latest: true
