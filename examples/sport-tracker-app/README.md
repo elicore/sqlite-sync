@@ -19,7 +19,7 @@ From a **developer perspective**, this app showcases:
 ## Setup Instructions
 
 ### 1. Prerequisites
-- Node.js 18+
+- Node.js 20.x or \>=22.12.0
 - [SQLite Cloud account](https://sqlitecloud.io)
 
 ### 2. Database Setup
