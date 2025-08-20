@@ -2935,10 +2935,18 @@ int cloudsync_init_internal (sqlite3_context *context, const char *table_name, c
     // cloudsync_sync_table_key(data, table_name, "*", CLOUDSYNC_KEY_ALGO, crdt_algo_name(algo_new));
     
     // check triggers
-    dbutils_check_triggers(db, table_name, algo_new);
+    int rc = dbutils_check_triggers(db, table_name, algo_new);
+    if (rc != SQLITE_OK) {
+        dbutils_context_result_error(context, "An error occurred while creating triggers: %s (%d)", sqlite3_errmsg(db), rc);
+        return SQLITE_MISUSE;
+    }
     
     // check meta-table
-    dbutils_check_metatable(db, table_name, algo_new);
+    rc = dbutils_check_metatable(db, table_name, algo_new);
+    if (rc != SQLITE_OK) {
+        dbutils_context_result_error(context, "An error occurred while creating metatable: %s (%d)", sqlite3_errmsg(db), rc);
+        return SQLITE_MISUSE;
+    }
     
     // add prepared statements
     if (stmts_add_tocontext(db, data) != SQLITE_OK) {
