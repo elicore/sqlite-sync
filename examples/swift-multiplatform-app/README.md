@@ -44,4 +44,7 @@ When you run the test app, you should see status messages in the UI indicating:
 - Extension loading status
 - CloudSync version information (if successfully loaded)
 
+<img width="640" height="400" src="https://github.com/user-attachments/assets/d37d65c0-7465-4547-9831-63ea2da2849d" />
+
+
 This confirms that CloudSync is properly integrated and functional in your Swift project.
