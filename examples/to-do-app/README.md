@@ -37,7 +37,7 @@ Rename the `.env.example` into `.env` and fill with your values.
 
 ```bash
 npx expo prebuild # run once
-npm start
+npm run ios # or android
 ```
 
 ## ✨ Features
