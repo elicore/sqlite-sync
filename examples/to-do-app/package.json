@@ -4,7 +4,7 @@
   "description": "An Expo template for building apps with the SQLite CloudSync extension",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sqliteai/sqlite-sync.git"
+    "url": "git+https://github.com/sqliteai/sqlite-sync.git"
   },
   "author": "SQLiteAI",
   "keywords": ["expo-template", "sqlite", "cloudsync", "todo", "sync", "react-native", "expo", "template"],
@@ -38,6 +38,5 @@
   "devDependencies": {
     "@babel/core": "7.28.3",
     "react-native-dotenv": "3.4.11"
-  },
-  "private": true
+  }
 }
