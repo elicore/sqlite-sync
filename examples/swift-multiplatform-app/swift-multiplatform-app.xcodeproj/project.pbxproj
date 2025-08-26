@@ -47,7 +47,6 @@
 		3F4FBFE02E537A140054F3D9 /* swift-multiplatform-app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "swift-multiplatform-app.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3F4FBFEE2E537A160054F3D9 /* swift-multiplatform-appTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-multiplatform-appTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3F4FBFF82E537A160054F3D9 /* swift-multiplatform-appUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-multiplatform-appUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3F4FC00C2E537B890054F3D9 /* CloudSync.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = CloudSync.xcframework; path = ../../Downloads/CloudSync.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -146,7 +145,6 @@
 			isa = PBXGroup;
 			children = (
 				3F0ED2F02E5CADC700693353 /* CloudSync.xcframework */,
-				3F4FC00C2E537B890054F3D9 /* CloudSync.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
