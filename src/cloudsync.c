@@ -3373,6 +3373,9 @@ int cloudsync_register (sqlite3 *db, char **pzErrMsg) {
     // load config, if exists
     if (cloudsync_config_exists(db)) {
         cloudsync_context_init(db, ctx, NULL);
+        
+        // make sure to update internal version to current version
+        dbutils_settings_set_key_value(db, NULL, CLOUDSYNC_KEY_LIBVERSION, CLOUDSYNC_VERSION);
     }
     
     return SQLITE_OK;

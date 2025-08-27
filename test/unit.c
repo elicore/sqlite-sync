@@ -36,7 +36,7 @@ int stmt_execute (sqlite3_stmt *stmt, void *data);
 
 sqlite3_int64 dbutils_select (sqlite3 *db, const char *sql, const char **values, int types[], int lens[], int count, int expected_type);
 int dbutils_settings_table_load_callback (void *xdata, int ncols, char **values, char **names);
-int dbutils_settings_check_version (sqlite3 *db);
+int dbutils_settings_check_version (sqlite3 *db, const char *version);
 bool dbutils_migrate (sqlite3 *db);
 const char *opname_from_value (int value);
 int colname_is_legal (const char *name);
@@ -1887,13 +1887,16 @@ bool do_test_dbutils (void) {
     if (p != NULL) goto finalize;
     
     dbutils_settings_set_key_value(db, NULL, CLOUDSYNC_KEY_LIBVERSION, "0.0.0");
-    int cmp = dbutils_settings_check_version(db);
+    int cmp = dbutils_settings_check_version(db, NULL);
     if (cmp == 0) goto finalize;
     
     dbutils_settings_set_key_value(db, NULL, CLOUDSYNC_KEY_LIBVERSION, CLOUDSYNC_VERSION); 
-    cmp = dbutils_settings_check_version(db);
+    cmp = dbutils_settings_check_version(db, NULL);
     if (cmp != 0) goto finalize;
 
+    cmp = dbutils_settings_check_version(db, "0.8.25");
+    if (cmp <= 0) goto finalize;
+    
     //dbutils_settings_table_load_callback(NULL, 0, NULL, NULL);
     dbutils_migrate(NULL);
     

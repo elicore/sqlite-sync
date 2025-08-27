@@ -37,6 +37,8 @@ typedef struct {
     cloudsync_context   *data;
 } dbutils_settings_table_context;
 
+int dbutils_settings_check_version (sqlite3 *db, const char *version);
+
 // MARK: - General -
 
 DATABASE_RESULT dbutils_exec (sqlite3_context *context, sqlite3 *db, const char *sql, const char **values, int types[], int lens[], int count, DATABASE_RESULT results[], int expected_types[], int result_count) {
@@ -498,6 +500,10 @@ finalize:
 int dbutils_check_triggers (sqlite3 *db, const char *table, table_algo algo) {
     DEBUG_DBFUNCTION("dbutils_check_triggers %s", table);
     
+    if (dbutils_settings_check_version(db, "0.8.25") <= 0) {
+        dbutils_delete_triggers(db, table);
+    }
+    
     char *trigger_name = NULL;
     int rc = SQLITE_NOMEM;
     
@@ -795,7 +801,7 @@ int dbutils_settings_get_int_value (sqlite3 *db, const char *key) {
     return (int)strtol(buffer, NULL, 0);
 }
 
-int dbutils_settings_check_version (sqlite3 *db) {
+int dbutils_settings_check_version (sqlite3 *db, const char *version) {
     DEBUG_SETTINGS("dbutils_settings_check_version");
     char buffer[256];
     if (dbutils_settings_get_value(db, CLOUDSYNC_KEY_LIBVERSION, buffer, sizeof(buffer)) == NULL) return -666;
@@ -803,7 +809,7 @@ int dbutils_settings_check_version (sqlite3 *db) {
     int major1, minor1, patch1;
     int major2, minor2, patch2;
     int count1 = sscanf(buffer, "%d.%d.%d", &major1, &minor1, &patch1);
-    int count2 = sscanf(CLOUDSYNC_VERSION, "%d.%d.%d", &major2, &minor2, &patch2);
+    int count2 = sscanf((version == NULL ? CLOUDSYNC_VERSION : version), "%d.%d.%d", &major2, &minor2, &patch2);
     
     if (count1 != 3 || count2 != 3) return -666;
     
@@ -965,7 +971,9 @@ int dbutils_settings_table_load_callback (void *xdata, int ncols, char **values,
         const char *value = values[i+3];
         if (strcmp(key, "algo")!=0) continue;
         
-        table_add_to_context(db, data, crdt_algo_from_name(value), table_name);
+        if (dbutils_check_triggers(db, table_name, crdt_algo_from_name(value)) != SQLITE_OK) return SQLITE_MISUSE;
+        if (table_add_to_context(db, data, crdt_algo_from_name(value), table_name)  == false) return SQLITE_MISUSE;
+        
         DEBUG_SETTINGS("load tbl_name: %s value: %s", key, value);
     }
     
