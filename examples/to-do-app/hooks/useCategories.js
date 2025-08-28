@@ -30,6 +30,16 @@ const useCategories = () => {
     }
   }
 
+  const removeCategory = async categoryName => {
+    try {
+      await db.execute('DELETE FROM tags WHERE name = ?', [categoryName])
+      db.execute('SELECT cloudsync_network_send_changes();')
+      setMoreCategories(prevCategories => prevCategories.filter(cat => cat !== categoryName))
+    } catch (error) {
+      console.error('Error removing category', error)
+    }
+  }
+
   const initializeTables = async () => {
     let extensionPath;
 
@@ -86,6 +96,7 @@ const useCategories = () => {
   return {
     moreCategories,
     addCategory,
+    removeCategory,
     getCategories
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View, Alert } from "react-native";
 import { Avatar, Card, Text, Modal, Portal, Button, TextInput } from "react-native-paper";
 import { useFocusEffect } from '@react-navigation/native';
 import useCategories from "../hooks/useCategories";
@@ -22,7 +22,7 @@ const Categories = ({ navigation }) => {
     day: "numeric",
   });
 
-  const { moreCategories, addCategory } = useCategories();
+  const { moreCategories, addCategory, removeCategory } = useCategories();
   const { setSync } = useSyncContext();
 
   const [newCategory, setNewCategory] = useState("");
@@ -43,6 +43,24 @@ const Categories = ({ navigation }) => {
     }
     setNewCategory("");
     hideModal();
+  }
+
+  function handleRemoveCategory(categoryName) {
+    Alert.alert(
+      "Delete Category",
+      `Are you sure you want to delete "${categoryName}"?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => removeCategory(categoryName)
+        }
+      ]
+    );
   }
 
   return (
@@ -127,6 +145,7 @@ const Categories = ({ navigation }) => {
               key={index}
               style={styles.card}
               onPress={() => navigation.navigate("Tasks", { category })}
+              onLongPress={() => handleRemoveCategory(category)}
               mode="contained"
             >
               <Card.Title
