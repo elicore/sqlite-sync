@@ -63,7 +63,7 @@ The function supports three overloads:
 
 **Parameters:**
 
-- `table_name` (TEXT): The name of the table to initialize. Can be set to `'*'` to initialize all tables in the database.
+- `table_name` (TEXT): The name of the table to initialize.
 - `crdt_algo` (TEXT, optional): The CRDT algorithm to use. Can be "cls", "dws", "aws", "gos". Defaults to "cls".
 - `force` (BOOLEAN, optional): If `true` (or `1`), it skips the check that prevents the use of a single-column INTEGER primary key. Defaults to `false`. It is strongly recommended to use globally unique primary keys instead of integers.
 
@@ -78,8 +78,6 @@ SELECT cloudsync_init('my_table');
 -- Initialize a single table for synchronization with a different algorithm Delete-Wins Set (DWS)
 SELECT cloudsync_init('my_table', 'dws');
 
--- Initialize all tables for synchronization with the Causal-Length Set (CLS) Algorithm, and skip the check on single-column INTEGER primary key
-SELECT cloudsync_init('*', 'cls', true);
 ```
 
 ---
@@ -144,7 +142,7 @@ SELECT cloudsync_is_enabled('my_table');
 
 **Parameters:**
 
-- `table_name` (TEXT): The name of the table to clean up. Can be set to `'*'` to clean up all synchronized tables.
+- `table_name` (TEXT): The name of the table to clean up.
 
 **Returns:** None.
 
@@ -154,8 +152,6 @@ SELECT cloudsync_is_enabled('my_table');
 -- Clean up a single table
 SELECT cloudsync_cleanup('my_table');
 
--- Clean up all synchronized tables
-SELECT cloudsync_cleanup('*');
 ```
 
 ---
