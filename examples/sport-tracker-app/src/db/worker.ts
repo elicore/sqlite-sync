@@ -1,4 +1,4 @@
-import sqlite3InitModule from "@sqliteai/sqlite-sync-wasm";
+import sqlite3InitModule from "@sqliteai/sqlite-wasm";
 import schemaSQL from "../../sport-tracker-schema.sql?raw";
 import { getDatabaseOperations as getDatabaseOperations } from "./databaseOperations";
 import {

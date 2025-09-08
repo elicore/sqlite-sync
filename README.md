@@ -118,7 +118,7 @@ Download the appropriate pre-built binary for your platform from the official [R
 
 ### WASM Version
 
-You can download the WebAssembly (WASM) version of SQLite with the SQLite Sync extension enabled from: https://www.npmjs.com/package/@sqliteai/sqlite-sync-wasm
+You can download the WebAssembly (WASM) version of SQLite with the SQLite Sync extension enabled from: https://www.npmjs.com/package/@sqliteai/sqlite-wasm
 
 ### Loading the Extension
 

@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-> This app uses the packed WASM version of SQLite with the [SQLite Sync extension enabled](https://www.npmjs.com/package/@sqliteai/sqlite-sync-wasm).
+> This app uses the packed WASM version of SQLite with the [SQLite Sync extension enabled](https://www.npmjs.com/package/@sqliteai/sqlite-wasm).
 
 ## Demo Use Case: Multi-User Sync Scenario
 

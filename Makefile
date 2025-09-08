@@ -1,5 +1,5 @@
 # Makefile for SQLite Sync Extension
-# Supports compilation for Linux, macOS, Windows, Android, iOS and WASM
+# Supports compilation for Linux, macOS, Windows, Android and iOS
 
 # customize sqlite3 executable with 
 # make test SQLITE3=/opt/homebrew/Cellar/sqlite/3.49.1/bin/sqlite3
@@ -7,9 +7,6 @@ SQLITE3 ?= sqlite3
 
 # set curl version to download and build
 CURL_VERSION ?= 8.12.1
-
-# set sqlite version for WASM static build
-SQLITE_VERSION ?= 3.49.2
 
 # Set default platform if not specified
 ifeq ($(OS),Windows_NT)
@@ -50,14 +47,13 @@ CURL_DIR = curl
 CURL_SRC = $(CURL_DIR)/src/curl-$(CURL_VERSION)
 COV_DIR = coverage
 CUSTOM_CSS = $(TEST_DIR)/sqliteai.css
-BUILD_WASM = build/wasm
 
 SRC_FILES = $(wildcard $(SRC_DIR)/*.c)
 TEST_SRC = $(wildcard $(TEST_DIR)/*.c)
 TEST_FILES = $(SRC_FILES) $(TEST_SRC) $(wildcard $(SQLITE_DIR)/*.c)
 RELEASE_OBJ = $(patsubst %.c, $(BUILD_RELEASE)/%.o, $(notdir $(SRC_FILES)))
 TEST_OBJ = $(patsubst %.c, $(BUILD_TEST)/%.o, $(notdir $(TEST_FILES)))
-COV_FILES = $(filter-out $(SRC_DIR)/lz4.c $(SRC_DIR)/network.c $(SRC_DIR)/wasm.c, $(SRC_FILES))
+COV_FILES = $(filter-out $(SRC_DIR)/lz4.c $(SRC_DIR)/network.c, $(SRC_FILES))
 CURL_LIB = $(CURL_DIR)/$(PLATFORM)/libcurl.a
 TEST_TARGET = $(patsubst %.c,$(DIST_DIR)/%$(EXE), $(notdir $(TEST_SRC)))
 
@@ -116,8 +112,6 @@ else ifeq ($(PLATFORM),ios-sim)
 	CFLAGS += -arch x86_64 -arch arm64 $(SDK)
 	CURL_CONFIG = --host=arm64-apple-darwin --with-secure-transport CFLAGS="-arch x86_64 -arch arm64 -isysroot $$(xcrun --sdk iphonesimulator --show-sdk-path) -miphonesimulator-version-min=11.0"
 	STRIP = strip -x -S $@
-else ifeq ($(PLATFORM),wasm)
-	TARGET := $(DIST_DIR)/sqlite-wasm.zip
 else # linux
 	TARGET := $(DIST_DIR)/cloudsync.so
 	LDFLAGS += -shared -lssl -lcrypto
@@ -159,7 +153,6 @@ $(shell mkdir -p $(BUILD_DIRS) $(DIST_DIR))
 extension: $(TARGET)
 all: $(TARGET) 
 
-ifneq ($(PLATFORM),wasm)
 # Loadable library
 $(TARGET): $(RELEASE_OBJ) $(DEF_FILE) $(CURL_LIB)
 	$(CC) $(RELEASE_OBJ) $(DEF_FILE) -o $@ $(LDFLAGS)
@@ -169,25 +162,6 @@ ifeq ($(PLATFORM),windows)
 endif
 	# Strip debug symbols
 	$(STRIP)
-else
-#WASM build
-EMSDK := $(BUILD_WASM)/emsdk
-$(EMSDK):
-	git clone https://github.com/emscripten-core/emsdk.git $(EMSDK)
-	cd $(EMSDK) && ./emsdk install latest && ./emsdk activate latest
-
-SQLITE_SRC := $(BUILD_WASM)/sqlite
-$(SQLITE_SRC): $(EMSDK)
-	git clone --branch version-$(SQLITE_VERSION) --depth 1 https://github.com/sqlite/sqlite.git $(SQLITE_SRC)
-	cd $(EMSDK) && . ./emsdk_env.sh && cd ../sqlite && ./configure --enable-all
-
-WASM_FLAGS = emcc.jsflags += -sFETCH
-WASM_MAKEFILE = $(SQLITE_SRC)/ext/wasm/GNUmakefile
-$(TARGET): $(SQLITE_SRC) $(SRC_FILES)
-	@grep '$(WASM_FLAGS)' '$(WASM_MAKEFILE)' >/dev/null 2>&1 || echo '$(WASM_FLAGS)' >> '$(WASM_MAKEFILE)'
-	cd $(SQLITE_SRC)/ext/wasm && $(MAKE) dist sqlite3_wasm_extra_init.c=../../../../../src/wasm.c
-	mv $(SQLITE_SRC)/ext/wasm/sqlite-wasm-*.zip $(TARGET)
-endif
 
 # Test executable
 $(TEST_TARGET): $(TEST_OBJ)
@@ -367,14 +341,12 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 xcframework: $(DIST_DIR)/CloudSync.xcframework
 
 # Tools
-sqlite_version: 
-	@echo $(SQLITE_VERSION)
 version:
 	@echo $(shell sed -n 's/^#define CLOUDSYNC_VERSION[[:space:]]*"\([^"]*\)".*/\1/p' src/cloudsync.h)
 
 # Clean up generated files
 clean:
-	rm -rf $(BUILD_DIRS) $(DIST_DIR)/* $(COV_DIR) *.gcda *.gcno *.gcov $(CURL_DIR)/src *.sqlite $(BUILD_WASM)
+	rm -rf $(BUILD_DIRS) $(DIST_DIR)/* $(COV_DIR) *.gcda *.gcno *.gcov $(CURL_DIR)/src *.sqlite
 
 # Help message
 help:
@@ -389,7 +361,6 @@ help:
 	@echo "  android (needs ARCH to be set to x86_64 or arm64-v8a and ANDROID_NDK to be set)"
 	@echo "  ios (only on macOS - can be compiled with native network support)"
 	@echo "  ios-sim (only on macOS - can be compiled with native network support)"
-	@echo "  wasm (needs wabt[brew install wabt/sudo apt install wabt])"
 	@echo ""
 	@echo "Targets:"
 	@echo "  all	   				- Build the extension (default)"
@@ -397,4 +368,4 @@ help:
 	@echo "  test [COVERAGE=true]	- Test the extension with optional coverage output"
 	@echo "  help	  				- Display this help message"
 
-.PHONY: all clean test extension help xcframework
+.PHONY: all clean test extension help version xcframework

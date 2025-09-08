@@ -14,8 +14,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
-      /* '@sqlite.org/sqlite-wasm',  */
-      "@sqliteai/sqlite-sync-wasm",
+      "@sqliteai/sqlite-wasm",
     ],
   },
 });
