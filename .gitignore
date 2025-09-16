@@ -14,3 +14,4 @@ unittest
 **/node_modules/**
 .env
 package-lock.json
+.build

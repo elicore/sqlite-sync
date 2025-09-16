@@ -31,7 +31,6 @@ MAKEFLAGS += -j$(CPUS)
 CC = gcc
 CFLAGS = -Wall -Wextra -Wno-unused-parameter -I$(SRC_DIR) -I$(SQLITE_DIR) -I$(CURL_DIR)/include
 T_CFLAGS = $(CFLAGS) -DSQLITE_CORE -DCLOUDSYNC_UNITTEST -DCLOUDSYNC_OMIT_NETWORK -DCLOUDSYNC_OMIT_PRINT_RESULT
-LDFLAGS = -L./$(CURL_DIR)/$(PLATFORM) -lcurl
 COVERAGE = false
 
 # Directories
@@ -136,6 +135,8 @@ ifdef NATIVE_NETWORK
 
 $(BUILD_RELEASE)/%_m.o: %.m
 	$(CC) $(CFLAGS) -fobjc-arc -O3 -fPIC -c $< -o $@
+else
+	LDFLAGS += -L./$(CURL_DIR)/$(PLATFORM) -lcurl
 endif
 
 # Windows .def file generation
@@ -154,7 +155,11 @@ extension: $(TARGET)
 all: $(TARGET) 
 
 # Loadable library
+ifdef NATIVE_NETWORK
+$(TARGET): $(RELEASE_OBJ) $(DEF_FILE)
+else
 $(TARGET): $(RELEASE_OBJ) $(DEF_FILE) $(CURL_LIB)
+endif
 	$(CC) $(RELEASE_OBJ) $(DEF_FILE) -o $@ $(LDFLAGS)
 ifeq ($(PLATFORM),windows)
 	# Generate import library for Windows
