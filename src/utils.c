@@ -14,6 +14,8 @@
 #include <objbase.h>
 #include <bcrypt.h>
 #include <ntstatus.h> //for STATUS_SUCCESS
+#include <io.h>
+#define file_close      _close
 #else
 #include <unistd.h>
 #if defined(__APPLE__)
@@ -21,6 +23,14 @@
 #elif !defined(__ANDROID__)
 #include <sys/random.h>
 #endif
+#define file_close      close
+#endif
+
+#ifdef CLOUDSYNC_DESKTOP_OS
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 #ifndef SQLITE_CORE
@@ -280,6 +290,124 @@ uint64_t fnv1a_hash (const char *data, size_t len) {
     
     return h_final;
 }
+
+// MARK: - Files -
+
+#ifdef CLOUDSYNC_DESKTOP_OS
+
+bool file_delete (const char *path) {
+    #ifdef _WIN32
+    return DeleteFileA(path);
+    #else
+    return (unlink(path) == 0);
+    #endif
+}
+
+static bool file_read_all (int fd, char *buf, size_t n) {
+    size_t off = 0;
+    while (off < n) {
+        #ifdef _WIN32
+        int r = _read(fd, buf + off, (unsigned)(n - off));
+        if (r <= 0) return false;
+        #else
+        ssize_t r = read(fd, buf + off, n - off);
+        if (r < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        if (r == 0) return false; // unexpected EOF
+        #endif
+        off += (size_t)r;
+    }
+    return true;
+}
+
+char *file_read (const char *path, size_t *len) {
+    int fd = -1;
+    char *buffer = NULL;
+
+    #ifdef _WIN32
+    fd = _open(path, _O_RDONLY | _O_BINARY);
+    #else
+    fd = open(path, O_RDONLY);
+    #endif
+    if (fd < 0) goto abort_read;
+
+    // Get size after open to reduce TOCTTOU
+    #ifdef _WIN32
+    struct _stat64 st;
+    if (_fstat64(fd, &st) != 0 || st.st_size < 0) goto abort_read;
+    int64_t isz = st.st_size;
+    #else
+    struct stat st;
+    if (fstat(fd, &st) != 0 || st.st_size < 0) goto abort_read;
+    int64_t isz = st.st_size;
+    #endif
+
+    size_t sz = (size_t)isz;
+    // optional: guard against huge files that don't fit in size_t
+    if ((int64_t)sz != isz) goto abort_read;
+
+    buffer = (char *)cloudsync_memory_alloc(sz + 1);
+    if (!buffer) goto abort_read;
+    buffer[sz] = '\0';
+
+    if (!file_read_all(fd, buffer, sz)) goto abort_read;
+    if (len) *len = sz;
+    
+    file_close(fd);
+    return buffer;
+
+abort_read:
+    if (len) *len = -1;
+    if (buffer) cloudsync_memory_free(buffer);
+    if (fd >= 0) file_close(fd);
+    return NULL;
+}
+
+int file_create (const char *path) {
+    #ifdef _WIN32
+    int flags = _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY;
+    int mode  = _S_IWRITE; // Windows ignores most POSIX perms
+    return _open(path, flags, mode);
+    #else
+    int flags = O_WRONLY | O_CREAT | O_TRUNC;
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    return open(path, flags, mode);
+    #endif
+}
+
+static bool file_write_all (int fd, const char *buf, size_t n) {
+    size_t off = 0;
+    while (off < n) {
+        #ifdef _WIN32
+        int w = _write(fd, buf + off, (unsigned)(n - off));
+        if (w <= 0) return false;
+        #else
+        ssize_t w = write(fd, buf + off, n - off);
+        if (w < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        if (w == 0) return false;
+        #endif
+        off += (size_t)w;
+    }
+    return true;
+}
+
+bool file_write (const char *path, const char *buffer, size_t len) {
+    int fd = file_create(path);
+    if (fd < 0) return false;
+    
+    bool res = file_write_all(fd, buffer, len);
+    
+    file_close(fd);
+    return res;
+}
+
+#endif
+
 // MARK: - CRDT algos -
 
 table_algo crdt_algo_from_name (const char *algo_name) {

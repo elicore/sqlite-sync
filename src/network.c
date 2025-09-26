@@ -693,28 +693,12 @@ int cloudsync_network_send_changes_internal (sqlite3_context *context, int argc,
     network_data *data = (network_data *)cloudsync_get_auxdata(context);
     if (!data) {sqlite3_result_error(context, "Unable to retrieve CloudSync context.", -1); return SQLITE_ERROR;}
     
-    sqlite3 *db = sqlite3_context_db_handle(context);
-
-    int db_version = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_SEND_DBVERSION);
-    if (db_version<0) {sqlite3_result_error(context, "Unable to retrieve db_version.", -1); return SQLITE_ERROR;}
-
-    int seq = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_SEND_SEQ);
-    if (seq<0) {sqlite3_result_error(context, "Unable to retrieve seq.", -1); return SQLITE_ERROR;}
-    
-    // retrieve BLOB
-    char sql[1024];
-    snprintf(sql, sizeof(sql), "WITH max_db_version AS (SELECT MAX(db_version) AS max_db_version FROM cloudsync_changes) "
-                               "SELECT cloudsync_payload_encode(tbl, pk, col_name, col_value, col_version, db_version, site_id, cl, seq), max_db_version AS max_db_version, MAX(IIF(db_version = max_db_version, seq, NULL)) FROM cloudsync_changes, max_db_version WHERE site_id=cloudsync_siteid() AND (db_version>%d OR (db_version=%d AND seq>%d))", db_version, db_version, seq);
-    int blob_size = 0;
+    // retrieve payload
     char *blob = NULL;
-    sqlite3_int64 new_db_version = 0;
-    sqlite3_int64 new_seq = 0;
-    int rc = dbutils_blob_int_int_select(db, sql, &blob, &blob_size, &new_db_version, &new_seq);
-    if (rc != SQLITE_OK) {
-        sqlite3_result_error(context, "cloudsync_network_send_changes unable to get changes", -1);
-        sqlite3_result_error_code(context, rc);
-        return rc;
-    }
+    int blob_size = 0, db_version = 0, seq = 0;
+    sqlite3_int64 new_db_version = 0, new_seq = 0;
+    int rc = cloudsync_payload_get(context, &blob, &blob_size, &db_version, &seq, &new_db_version, &new_seq);
+    if (rc != SQLITE_OK) return rc;
     
     // exit if there is no data to send
     if (blob == NULL || blob_size == 0) return SQLITE_OK;
@@ -749,7 +733,9 @@ int cloudsync_network_send_changes_internal (sqlite3_context *context, int argc,
         return SQLITE_ERROR;
     }
     
+    // update db_version and seq
     char buf[256];
+    sqlite3 *db = sqlite3_context_db_handle(context);
     if (new_db_version != db_version) {
         snprintf(buf, sizeof(buf), "%lld", new_db_version);
         dbutils_settings_set_key_value(db, context, CLOUDSYNC_KEY_SEND_DBVERSION, buf);

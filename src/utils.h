@@ -15,6 +15,19 @@
 #include <strings.h>
 #include <string.h>
 
+// CLOUDSYNC_DESKTOP_OS = 1 if compiling for macOS, Linux (desktop), or Windows
+// Not set for iOS, Android, WebAssembly, or other platforms
+#if defined(_WIN32) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+    #define CLOUDSYNC_DESKTOP_OS 1
+#elif defined(__APPLE__) && defined(__MACH__)
+    #include <TargetConditionals.h>
+    #if TARGET_OS_OSX
+        #define CLOUDSYNC_DESKTOP_OS 1
+    #endif
+#elif defined(__linux__) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+    #define CLOUDSYNC_DESKTOP_OS 1
+#endif
+
 #ifndef SQLITE_CORE
 #include "sqlite3ext.h"
 #else
@@ -134,5 +147,12 @@ char *cloudsync_string_dup (const char *str, bool lowercase);
 int cloudsync_blob_compare(const char *blob1, size_t size1, const char *blob2, size_t size2);
 
 void cloudsync_rowid_decode (sqlite3_int64 rowid, sqlite3_int64 *db_version, sqlite3_int64 *seq);
+
+// available only on Desktop OS
+#ifdef CLOUDSYNC_DESKTOP_OS
+bool file_delete (const char *path);
+char *file_read (const char *path, size_t *len);
+bool file_write (const char *path, const char *buffer, size_t len);
+#endif
 
 #endif

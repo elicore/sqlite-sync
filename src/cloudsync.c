@@ -2258,6 +2258,108 @@ void cloudsync_payload_decode (sqlite3_context *context, int argc, sqlite3_value
     cloudsync_payload_apply(context, payload, blen);
 }
 
+// MARK: - Payload load/store -
+
+#ifdef CLOUDSYNC_DESKTOP_OS
+
+int cloudsync_payload_get (sqlite3_context *context, char **blob, int *blob_size, int *db_version, int *seq, sqlite3_int64 *new_db_version, sqlite3_int64 *new_seq) {
+    sqlite3 *db = sqlite3_context_db_handle(context);
+
+    *db_version = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_SEND_DBVERSION);
+    if (*db_version < 0) {sqlite3_result_error(context, "Unable to retrieve db_version.", -1); return SQLITE_ERROR;}
+
+    *seq = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_SEND_SEQ);
+    if (*seq < 0) {sqlite3_result_error(context, "Unable to retrieve seq.", -1); return SQLITE_ERROR;}
+    
+    // retrieve BLOB
+    char sql[1024];
+    snprintf(sql, sizeof(sql), "WITH max_db_version AS (SELECT MAX(db_version) AS max_db_version FROM cloudsync_changes) "
+                               "SELECT cloudsync_payload_encode(tbl, pk, col_name, col_value, col_version, db_version, site_id, cl, seq), max_db_version AS max_db_version, MAX(IIF(db_version = max_db_version, seq, NULL)) FROM cloudsync_changes, max_db_version WHERE site_id=cloudsync_siteid() AND (db_version>%d OR (db_version=%d AND seq>%d))", *db_version, *db_version, *seq);
+    
+    int rc = dbutils_blob_int_int_select(db, sql, blob, blob_size, new_db_version, new_seq);
+    if (rc != SQLITE_OK) {
+        sqlite3_result_error(context, "cloudsync_network_send_changes unable to get changes", -1);
+        sqlite3_result_error_code(context, rc);
+        return rc;
+    }
+    
+    // exit if there is no data to send
+    if (blob == NULL || blob_size == 0) return SQLITE_OK;
+    return rc;
+}
+
+void cloudsync_payload_save (sqlite3_context *context, int argc, sqlite3_value **argv) {
+    DEBUG_FUNCTION("cloudsync_payload_save");
+    
+    // sanity check argument
+    if (sqlite3_value_type(argv[0]) != SQLITE_TEXT) {
+        sqlite3_result_error(context, "Unable to retrieve file path.", -1);
+        return;
+    }
+    
+    // retrieve full path to file
+    const char *path = (const char *)sqlite3_value_text(argv[0]);
+    file_delete(path);
+    
+    // retrieve payload
+    char *blob = NULL;
+    int blob_size = 0, db_version = 0, seq = 0;
+    sqlite3_int64 new_db_version = 0, new_seq = 0;
+    int rc = cloudsync_payload_get(context, &blob, &blob_size, &db_version, &seq, &new_db_version, &new_seq);
+    if (rc != SQLITE_OK) return;
+    
+    // exit if there is no data to send
+    if (blob == NULL || blob_size == 0) return;
+    
+    // write payload to file
+    bool res = file_write(path, blob, (size_t)blob_size);
+    sqlite3_free(blob);
+    
+    if (res == false) {
+        sqlite3_result_error(context, "Unable to write payload to file path.", -1);
+        return;
+    }
+    
+    // update db_version and seq
+    char buf[256];
+    sqlite3 *db = sqlite3_context_db_handle(context);
+    if (new_db_version != db_version) {
+        snprintf(buf, sizeof(buf), "%lld", new_db_version);
+        dbutils_settings_set_key_value(db, context, CLOUDSYNC_KEY_SEND_DBVERSION, buf);
+    }
+    if (new_seq != seq) {
+        snprintf(buf, sizeof(buf), "%lld", new_seq);
+        dbutils_settings_set_key_value(db, context, CLOUDSYNC_KEY_SEND_SEQ, buf);
+    }
+}
+
+void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value **argv) {
+    DEBUG_FUNCTION("cloudsync_payload_load");
+    
+    // sanity check argument
+    if (sqlite3_value_type(argv[0]) != SQLITE_TEXT) {
+        sqlite3_result_error(context, "Unable to retrieve file path.", -1);
+        return;
+    }
+    
+    // retrieve full path to file
+    const char *path = (const char *)sqlite3_value_text(argv[0]);
+    file_delete(path);
+    
+    size_t payload_size = 0;
+    char *payload = file_read(path, &payload_size);
+    if (!payload) {
+        if (payload_size == -1) sqlite3_result_error(context, "Unable to read payload from file path.", -1);
+        return;
+    }
+    
+    int nrows = cloudsync_payload_apply (context, payload, (int)payload_size);
+    if (payload) cloudsync_memory_free(payload);
+    if (nrows != -1) sqlite3_result_int(context, nrows);
+}
+
+#endif
+
 // MARK: - Public -
 
 void cloudsync_version (sqlite3_context *context, int argc, sqlite3_value **argv) {
@@ -3330,6 +3432,14 @@ int cloudsync_register (sqlite3 *db, char **pzErrMsg) {
     
     rc = dbutils_register_function(db, "cloudsync_payload_decode", cloudsync_payload_decode, -1, pzErrMsg, ctx, NULL);
     if (rc != SQLITE_OK) return rc;
+    
+    #ifdef CLOUDSYNC_DESKTOP_OS
+    rc = dbutils_register_function(db, "cloudsync_payload_save", cloudsync_payload_save, 1, pzErrMsg, ctx, NULL);
+    if (rc != SQLITE_OK) return rc;
+    
+    rc = dbutils_register_function(db, "cloudsync_payload_load", cloudsync_payload_load, 1, pzErrMsg, ctx, NULL);
+    if (rc != SQLITE_OK) return rc;
+    #endif
     
     // PRIVATE functions
     rc = dbutils_register_function(db, "cloudsync_is_sync", cloudsync_is_sync, 1, pzErrMsg, ctx, NULL);
