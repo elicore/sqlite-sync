@@ -2260,8 +2260,6 @@ void cloudsync_payload_decode (sqlite3_context *context, int argc, sqlite3_value
 
 // MARK: - Payload load/store -
 
-#ifdef CLOUDSYNC_DESKTOP_OS
-
 int cloudsync_payload_get (sqlite3_context *context, char **blob, int *blob_size, int *db_version, int *seq, sqlite3_int64 *new_db_version, sqlite3_int64 *new_seq) {
     sqlite3 *db = sqlite3_context_db_handle(context);
 
@@ -2287,6 +2285,8 @@ int cloudsync_payload_get (sqlite3_context *context, char **blob, int *blob_size
     if (blob == NULL || blob_size == 0) return SQLITE_OK;
     return rc;
 }
+
+#ifdef CLOUDSYNC_DESKTOP_OS
 
 void cloudsync_payload_save (sqlite3_context *context, int argc, sqlite3_value **argv) {
     DEBUG_FUNCTION("cloudsync_payload_save");
