@@ -322,7 +322,7 @@ static bool file_read_all (int fd, char *buf, size_t n) {
     return true;
 }
 
-char *file_read (const char *path, size_t *len) {
+char *file_read (const char *path, sqlite3_int64 *len) {
     int fd = -1;
     char *buffer = NULL;
 
@@ -359,6 +359,7 @@ char *file_read (const char *path, size_t *len) {
     return buffer;
 
 abort_read:
+    //fprintf(stderr, "file_read: failed to read '%s': %s\n", path, strerror(errno));
     if (len) *len = -1;
     if (buffer) cloudsync_memory_free(buffer);
     if (fd >= 0) file_close(fd);

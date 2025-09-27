@@ -2348,14 +2348,15 @@ void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value *
     // retrieve full path to file
     const char *path = (const char *)sqlite3_value_text(argv[0]);
     
-    size_t payload_size = 0;
+    sqlite3_int64 payload_size = 0;
     char *payload = file_read(path, &payload_size);
     if (!payload) {
         if (payload_size == -1) sqlite3_result_error(context, "Unable to read payload from file path.", -1);
+        if (payload) cloudsync_memory_free(payload);
         return;
     }
     
-    int nrows = cloudsync_payload_apply (context, payload, (int)payload_size);
+    int nrows = (payload_size) ? cloudsync_payload_apply (context, payload, (int)payload_size) : 0;
     if (payload) cloudsync_memory_free(payload);
     
     // returns number of applied rows
