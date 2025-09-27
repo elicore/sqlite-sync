@@ -2331,6 +2331,9 @@ void cloudsync_payload_save (sqlite3_context *context, int argc, sqlite3_value *
         snprintf(buf, sizeof(buf), "%lld", new_seq);
         dbutils_settings_set_key_value(db, context, CLOUDSYNC_KEY_SEND_SEQ, buf);
     }
+    
+    // returns blob size
+    sqlite3_result_int64(context, (sqlite3_int64)blob_size);
 }
 
 void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value **argv) {
@@ -2344,7 +2347,6 @@ void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value *
     
     // retrieve full path to file
     const char *path = (const char *)sqlite3_value_text(argv[0]);
-    file_delete(path);
     
     size_t payload_size = 0;
     char *payload = file_read(path, &payload_size);
@@ -2355,6 +2357,8 @@ void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value *
     
     int nrows = cloudsync_payload_apply (context, payload, (int)payload_size);
     if (payload) cloudsync_memory_free(payload);
+    
+    // returns number of applied rows
     if (nrows != -1) sqlite3_result_int(context, nrows);
 }
 
@@ -3027,6 +3031,8 @@ void cloudsync_terminate (sqlite3_context *context, int argc, sqlite3_value **ar
     // reset the site_id so the cloudsync_context_init will be executed again
     // if any other cloudsync function is called after terminate
     data->site_id[0] = 0;
+    
+    sqlite3_result_int(context, 1);
 }
 
 // MARK: -
@@ -3187,8 +3193,18 @@ void cloudsync_init (sqlite3_context *context, const char *table, const char *al
         }
     }
     
-    if (rc == SQLITE_OK) dbutils_update_schema_hash(db, &data->schema_hash);
-    else sqlite3_exec(db, "ROLLBACK TO cloudsync_init; RELEASE cloudsync_init", NULL, NULL, NULL);
+    // in case of error, rollback transaction
+    if (rc != SQLITE_OK) {
+        sqlite3_exec(db, "ROLLBACK TO cloudsync_init; RELEASE cloudsync_init", NULL, NULL, NULL);
+        return;
+    }
+    
+    dbutils_update_schema_hash(db, &data->schema_hash);
+    
+    // returns site_id as TEXT
+    char buffer[UUID_STR_MAXLEN];
+    cloudsync_uuid_v7_stringify(data->site_id, buffer, false);
+    sqlite3_result_text(context, buffer, -1, NULL);
 }
 
 void cloudsync_init3 (sqlite3_context *context, int argc, sqlite3_value **argv) {
