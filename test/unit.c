@@ -2194,7 +2194,7 @@ finalize:
     return result;
 }
 
-bool do_merge_enc_dec_values (sqlite3 *srcdb, sqlite3 *destdb, bool only_local, bool print_error_msg) {
+bool do_merge_using_payload (sqlite3 *srcdb, sqlite3 *destdb, bool only_local, bool print_error_msg) {
     // select changes from src and write changes to dest
     sqlite3_stmt *select_stmt = NULL;
     sqlite3_stmt *insert_stmt = NULL;
@@ -2248,7 +2248,7 @@ bool do_merge_enc_dec_values (sqlite3 *srcdb, sqlite3 *destdb, bool only_local, 
     result = true;
     
 finalize:
-    if (rc != SQLITE_OK && print_error_msg) printf("Error in do_merge_enc_dec_values %s - %s\n", sqlite3_errmsg(srcdb), sqlite3_errmsg(destdb));
+    if (rc != SQLITE_OK && print_error_msg) printf("Error in do_merge_using_payload %s - %s\n", sqlite3_errmsg(srcdb), sqlite3_errmsg(destdb));
     if (select_stmt) rc = sqlite3_finalize(select_stmt);
     if (insert_stmt) rc = sqlite3_finalize(insert_stmt);
     return result;
@@ -2259,7 +2259,7 @@ bool do_merge (sqlite3 *db[MAX_SIMULATED_CLIENTS], int nclients, bool only_local
         int target = i;
         for (int j=0; j<nclients; ++j) {
             if (target == j) continue;
-            if (do_merge_enc_dec_values(db[target], db[j], only_local, true) == false) {
+            if (do_merge_using_payload(db[target], db[j], only_local, true) == false) {
                 return false;
             }
         }
@@ -2281,7 +2281,7 @@ sqlite3 *do_create_database (void) {
     // manually load extension
     sqlite3_cloudsync_init(db, NULL, NULL);
     cloudsync_set_payload_apply_callback(db, unittest_payload_apply_rls_callback);
-
+    
     return db;
 }
 
@@ -2293,7 +2293,7 @@ void do_build_database_path (char buf[256], int i, time_t timestamp, int ntest) 
     #endif
 }
 
-sqlite3 *do_create_database_file (int i, time_t timestamp, int ntest) {
+sqlite3 *do_create_database_file_v2 (int i, time_t timestamp, int ntest, bool set_payload_apply_callback) {
     sqlite3 *db = NULL;
 
     // open database in home dir
@@ -2310,9 +2310,13 @@ sqlite3 *do_create_database_file (int i, time_t timestamp, int ntest) {
     
     // manually load extension
     sqlite3_cloudsync_init(db, NULL, NULL);
-    cloudsync_set_payload_apply_callback(db, unittest_payload_apply_rls_callback);
+    if (set_payload_apply_callback) cloudsync_set_payload_apply_callback(db, unittest_payload_apply_rls_callback);
 
     return db;
+}
+
+sqlite3 *do_create_database_file (int i, time_t timestamp, int ntest) {
+    return do_create_database_file_v2(i, timestamp, ntest, false);
 }
 
 bool do_test_merge (int nclients, bool print_result, bool cleanup_databases) {
@@ -2334,7 +2338,7 @@ bool do_test_merge (int nclients, bool print_result, bool cleanup_databases) {
     time_t timestamp = time(NULL);
     int saved_counter = test_counter;
     for (int i=0; i<nclients; ++i) {
-        db[i] = do_create_database_file(i, timestamp, test_counter++);
+        db[i] = do_create_database_file_v2(i, timestamp, test_counter++, true);
         if (db[i] == false) return false;
         
         if (do_create_tables(table_mask, db[i]) == false) {
@@ -2605,7 +2609,7 @@ bool do_test_merge_4 (int nclients, bool print_result, bool cleanup_databases) {
     
 finalize:
     for (int i=0; i<nclients; ++i) {
-        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_3 error: %s\n", sqlite3_errmsg(db[i]));
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_4 error: %s\n", sqlite3_errmsg(db[i]));
         if (db[i]) close_db(db[i]);
         if (cleanup_databases) {
             char buf[256];
@@ -2707,13 +2711,276 @@ bool do_test_merge_5 (int nclients, bool print_result, bool cleanup_databases, b
     
 finalize:
     for (int i=0; i<nclients; ++i) {
-        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_4: %s\n", sqlite3_errmsg(db[i]));
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_5: %s\n", sqlite3_errmsg(db[i]));
         if (db[i]) close_db(db[i]);
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
             file_delete_internal(buf);
         }
+    }
+    return result;
+}
+
+bool do_test_merge_check_db_version (int nclients, bool print_result, bool cleanup_databases, bool only_locals, bool set_payload_apply_callback) {
+    sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
+    bool result = false;
+    int rc = SQLITE_OK;
+    
+    memset(db, 0, sizeof(sqlite3 *) * MAX_SIMULATED_CLIENTS);
+    if (nclients >= MAX_SIMULATED_CLIENTS) {
+        nclients = MAX_SIMULATED_CLIENTS;
+        printf("Number of test merge reduced to %d clients\n", MAX_SIMULATED_CLIENTS);
+    } else if (nclients < 2) {
+        nclients = 2;
+        printf("Number of test merge increased to %d clients\n", 2);
+    }
+    
+    // create databases and tables
+    time_t timestamp = time(NULL);
+    int saved_counter = test_counter++;
+    for (int i=0; i<nclients; ++i) {
+        db[i] = do_create_database_file_v2(i, timestamp, saved_counter, set_payload_apply_callback);
+        if (db[i] == false) return false;
+        
+        rc = sqlite3_exec(db[i], "CREATE TABLE todo (id TEXT PRIMARY KEY NOT NULL, title TEXT, status TEXT);", NULL, NULL, NULL);
+        if (rc != SQLITE_OK) goto finalize;
+        
+        rc = sqlite3_exec(db[i], "SELECT cloudsync_init('todo');", NULL, NULL, NULL);
+        if (rc != SQLITE_OK) goto finalize;;
+    }
+    
+    // insert some data to db 0
+    
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID1', 'Buy groceries', 'in_progress1');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID2', 'Buy bananas', 'in_progress2'), ('ID3', 'Buy vegetables', 'in_progress3');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID4', 'Buy apples', 'in_progress4');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    rc = sqlite3_exec(db[0], "BEGIN TRANSACTION;", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID5', 'Buy oranges', 'in_progress5');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID6', 'Buy lemons', 'in_progress6');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID7', 'Buy pizza', 'in_progress7');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[0], "COMMIT;", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    if (do_merge_using_payload(db[0], db[1], only_locals, true) == false) {
+        goto finalize;
+    }
+    
+    // compare results
+    for (int i=1; i<nclients; ++i) {
+        char *sql = "SELECT * FROM todo ORDER BY id;";
+        if (do_compare_queries(db[0], sql, db[i], sql, -1, -1, print_result) == false) {
+            goto finalize;
+        }
+    }
+    
+    // compare values in the changes vtab
+    for (int i=1; i<nclients; ++i) {
+        char *sql = "SELECT * FROM cloudsync_changes;";
+        if (do_compare_queries(db[0], sql, db[i], sql, -1, -1, print_result) == false) {
+            goto finalize;
+        }
+    }
+    
+    if (print_result) {
+        printf("\n-> customers\n");
+        char *sql = "SELECT * FROM cloudsync_changes;";
+        do_query(db[1], sql, query_changes);
+    }
+    
+    result = true;
+    rc = SQLITE_OK;
+    
+finalize:
+    for (int i=0; i<nclients; ++i) {
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_check_db_version: %s\n", sqlite3_errmsg(db[i]));
+        if (db[i]) close_db(db[i]);
+        if (cleanup_databases) {
+            char buf[256];
+            do_build_database_path(buf, i, timestamp, saved_counter);
+            file_delete(buf);
+        }
+    }
+    return result;
+}
+
+bool do_test_merge_check_db_version_2 (int nclients, bool print_result, bool cleanup_databases, bool only_locals, bool set_payload_apply_callback) {
+    sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
+    bool result = false;
+    int rc = SQLITE_OK;
+    
+    memset(db, 0, sizeof(sqlite3 *) * MAX_SIMULATED_CLIENTS);
+    if (nclients >= MAX_SIMULATED_CLIENTS) {
+        nclients = MAX_SIMULATED_CLIENTS;
+        printf("Number of test merge reduced to %d clients\n", MAX_SIMULATED_CLIENTS);
+    } else if (nclients < 2) {
+        nclients = 2;
+        printf("Number of test merge increased to %d clients\n", 2);
+    }
+    
+    // create databases and tables
+    time_t timestamp = time(NULL);
+    int saved_counter = test_counter++;
+    for (int i=0; i<nclients; ++i) {
+        db[i] = do_create_database_file_v2(i, timestamp, saved_counter, set_payload_apply_callback);
+        if (db[i] == false) return false;
+        
+        rc = sqlite3_exec(db[i], "CREATE TABLE todo (id TEXT PRIMARY KEY NOT NULL, title TEXT, status TEXT);", NULL, NULL, NULL);
+        if (rc != SQLITE_OK) goto finalize;
+        
+        rc = sqlite3_exec(db[i], "SELECT cloudsync_init('todo');", NULL, NULL, NULL);
+        if (rc != SQLITE_OK) goto finalize;;
+    }
+    
+    // insert some data to db 0
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID1', 'Buy groceries', 'in_progress');", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[0], "INSERT INTO todo (id, title, status) VALUES ('ID2', 'Foo', 'Bar');", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    // insert some data to db 1
+    rc = sqlite3_exec(db[1], "INSERT INTO todo (id, title, status) VALUES ('ID3', 'Foo3', 'Bar3');", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[1], "INSERT INTO todo (id, title, status) VALUES ('ID4', 'Foo4', 'Bar4');", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db[1], "BEGIN TRANSACTION; INSERT INTO todo (id, title, status) VALUES ('ID5', 'Foo5', 'Bar5'); INSERT INTO todo (id, title, status) VALUES ('ID6', 'Foo6', 'Bar6'); COMMIT;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+
+    
+    if (do_merge_using_payload(db[0], db[1], only_locals, true) == false) {
+        goto finalize;
+    }
+    
+    if (do_merge_using_payload(db[1], db[0], only_locals, true) == false) {
+        goto finalize;
+    }
+    
+    // compare results
+    for (int i=1; i<nclients; ++i) {
+        char *sql = "SELECT * FROM todo ORDER BY id;";
+        if (do_compare_queries(db[0], sql, db[i], sql, -1, -1, print_result) == false) {
+            goto finalize;
+        }
+    }
+    
+    // check repeated db_version, seq tuple in not repeated in cloudsync_changes
+    for (int i=0; i<nclients; ++i) {
+        char *sql = "SELECT db_version, seq, COUNT(*) AS cnt "
+                    "FROM cloudsync_changes "
+                    "GROUP BY db_version, seq "
+                    "HAVING COUNT(*) > 1;";
+        sqlite3_stmt *vm = NULL;
+        rc = sqlite3_prepare_v2(db[i], sql, -1, &vm, NULL);
+        if (rc != SQLITE_OK) goto finalize;
+        rc = sqlite3_step(vm);
+        if (rc != SQLITE_DONE) {
+            printf("cloudsync_changes should not have repeated db_version and seq values, got: db_version=%d, seq=%d, count=%d\n", sqlite3_column_int(vm, 0), sqlite3_column_int(vm, 1), sqlite3_column_int(vm, 2));
+            if (vm) sqlite3_finalize(vm);
+            goto finalize;
+        }
+        if (vm) sqlite3_finalize(vm);
+    }
+    
+    // check grouped values from cloudsync_changes
+    char *query_changes = "SELECT db_version, COUNT(distinct(seq)) AS cnt FROM cloudsync_changes GROUP BY db_version;";
+    char *query_expected_results = "SELECT * FROM (VALUES (1,2),(2,2),(3,2),(4,2),(5,4));";
+    if (do_compare_queries(db[0], query_changes, db[0], query_expected_results, -1, -1, print_result) == false) {
+        goto finalize;
+    }
+    
+    if (print_result) {
+        printf("\n-> customers\n");
+        char *sql = "SELECT * FROM cloudsync_changes();";
+        do_query(db[1], sql, query_changes);
+    }
+    
+    result = true;
+    rc = SQLITE_OK;
+    
+finalize:
+    for (int i=0; i<nclients; ++i) {
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_check_db_version_2: %s\n", sqlite3_errmsg(db[i]));
+        if (db[i]) close_db(db[i]);
+        if (cleanup_databases) {
+            char buf[256];
+            do_build_database_path(buf, i, timestamp, saved_counter);
+            file_delete(buf);
+        }
+    }
+    return result;
+}
+
+bool do_test_insert_cloudsync_changes (bool print_result, bool cleanup_databases) {
+    sqlite3 *db = NULL;
+    bool result = false;
+    int rc = SQLITE_OK;
+    
+    // create databases and tables
+    time_t timestamp = time(NULL);
+    int saved_counter = test_counter++;
+    db = do_create_database_file(0, timestamp, saved_counter);
+    if (db == false) return false;
+        
+    rc = sqlite3_exec(db, "CREATE TABLE todo (id TEXT PRIMARY KEY NOT NULL, title TEXT, status TEXT);", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    rc = sqlite3_exec(db, "SELECT cloudsync_init('todo');", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;;
+    
+    // insert some data to db 0
+    
+    // db_version = 1
+    rc = sqlite3_exec(db, "INSERT INTO todo (id, title, status) VALUES ('1', 'Buy groceries', 'in_progress1');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+
+    // db_version = 2
+    rc = sqlite3_exec(db, "INSERT INTO todo (id, title, status) VALUES ('2', 'Buy bananas', 'in_progress2');", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    // insert hardcoded changes to cloudsync_changes:
+    // - insert a new row with values for two non-pk columns
+    rc = sqlite3_exec(db, "INSERT INTO cloudsync_changes (tbl,pk,col_name,col_value,col_version,db_version,site_id,cl,seq) VALUES ('todo',x'010B0133','title','New Item',10,10,x'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',1,0);", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    rc = sqlite3_exec(db, "INSERT INTO cloudsync_changes (tbl,pk,col_name,col_value,col_version,db_version,site_id,cl,seq) VALUES ('todo',x'010B0133','status','in progress',10,10,x'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',1,1);", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+  
+    // - update existing row, setting local db_value to 300
+    rc = sqlite3_exec(db, "INSERT INTO cloudsync_changes (tbl,pk,col_name,col_value,col_version,db_version,site_id,cl,seq) VALUES ('todo',x'010B0131','status','finalized',200,300,x'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',1,0);", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    // - this update must be ignored because col_version < local_col_version, even if db_version is greater
+    rc = sqlite3_exec(db, "INSERT INTO cloudsync_changes (tbl,pk,col_name,col_value,col_version,db_version,site_id,cl,seq) VALUES ('todo',x'010B0133','title','this update must be ignored',9,11,x'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',1,0);", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    // - this update must be applied because col_version > local_col_version, even if db_version is smaller
+    rc = sqlite3_exec(db, "INSERT INTO cloudsync_changes (tbl,pk,col_name,col_value,col_version,db_version,site_id,cl,seq) VALUES ('todo',x'010B0133','status','this update must be applied',11,9,x'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',1,0);", NULL, NULL, NULL); if (rc != SQLITE_OK) goto finalize;
+    
+    // compare results
+    char *sql = "SELECT * FROM todo ORDER BY id;";
+    char *query_expected_results = "SELECT * FROM (VALUES ('1','Buy groceries','finalized'),('2','Buy bananas','in_progress2'),('3','New Item','this update must be applied'));";
+    if (do_compare_queries(db, sql, db, query_expected_results, -1, -1, print_result) == false) {
+        goto finalize;
+    }
+    
+    // compare values in the changes vtab
+    sql = "SELECT col_name,col_value,col_version,db_version,cl,seq FROM cloudsync_changes;";
+    query_expected_results = "SELECT * FROM (VALUES ('title','Buy groceries',1,1,1,0),('title','Buy bananas',1,2,1,0),('status','in_progress2',1,2,1,1),('title','New Item',10,10,1,0),('status','finalized',200,300,1,0),('status','this update must be applied',11,301,1,0));";
+    if (do_compare_queries(db, sql, db, query_expected_results, -1, -1, print_result) == false) {
+        goto finalize;
+    }
+    
+    if (print_result) {
+        printf("\n-> customers\n");
+        char *sql = "SELECT * FROM todo;";
+        do_query(db, sql, query_changes);
+    }
+    
+    result = true;
+    rc = SQLITE_OK;
+    
+finalize:
+    if (rc != SQLITE_OK && db && (sqlite3_errcode(db) != SQLITE_OK)) printf("do_test_insert_cloudsync_changes: %s\n", sqlite3_errmsg(db));
+    if (db) close_db(db);
+    if (cleanup_databases) {
+        char buf[256];
+        do_build_database_path(buf, 0, timestamp, saved_counter);
+        file_delete(buf);
     }
     return result;
 }
@@ -2758,7 +3025,7 @@ bool do_test_merge_alter_schema_1 (int nclients, bool print_result, bool cleanup
     do_insert(db[0], TEST_PRIKEYS, NINSERT, print_result);
     
     // merge changes from db0 to db1, it should fail because db0 has a newer schema hash
-    if (do_merge_enc_dec_values(db[0], db[1], only_locals, false) == true) {
+    if (do_merge_using_payload(db[0], db[1], only_locals, false) == true) {
         return false;
     }
     
@@ -2850,7 +3117,7 @@ bool do_test_merge_alter_schema_2 (int nclients, bool print_result, bool cleanup
     }
     
     // merge changes from db0 to db1, it should fail because db0 has a newer schema hash
-    if (do_merge_enc_dec_values(db[0], db[1], only_locals, false) == true) {
+    if (do_merge_using_payload(db[0], db[1], only_locals, false) == true) {
         goto finalize;
     }
     
@@ -2858,7 +3125,7 @@ bool do_test_merge_alter_schema_2 (int nclients, bool print_result, bool cleanup
     do_insert_val(db[1], TEST_PRIKEYS, 123456, print_result);
         
     // merge changes from db1 to db0, it should work if columns are not removed
-    if (do_merge_enc_dec_values(db[1], db[0], only_locals, false) == false) {
+    if (do_merge_using_payload(db[1], db[0], only_locals, false) == false) {
         goto finalize;
     }
     
@@ -3379,15 +3646,15 @@ bool do_test_merge_three_way (int nclients, bool print_result, bool cleanup_data
     }
     
     // perform chain merge: A->B, then B->C, then verify A==C
-    if (do_merge_values(db[0], db[1], false) == false) {
+    if (do_merge_using_payload(db[0], db[1], false, true) == false) {
         goto finalize;
     }
     
-    if (do_merge_values(db[1], db[2], false) == false) {
+    if (do_merge_using_payload(db[1], db[2], false, true) == false) {
         goto finalize;
     }
     
-    if (do_merge_values(db[2], db[0], false) == false) {
+    if (do_merge_using_payload(db[2], db[0], false, true) == false) {
         goto finalize;
     }
     
@@ -3796,7 +4063,7 @@ bool do_test_merge_hub_spoke (int nclients, bool print_result, bool cleanup_data
     
     // hub -> all spokes
     for (int i=1; i<nclients; ++i) {
-        if (do_merge_values(db[0], db[i], false) == false) {
+        if (do_merge_using_payload(db[0], db[i], false, true) == false) {
             goto finalize;
         }
     }
@@ -4167,15 +4434,15 @@ bool do_test_merge_circular (int nclients, bool print_result, bool cleanup_datab
     }
     
     // circular merge: 0->1->2->0
-    if (do_merge_values(db[0], db[1], false) == false) {
+    if (do_merge_using_payload(db[0], db[1], false, true) == false) {
         goto finalize;
     }
     
-    if (do_merge_values(db[1], db[2], false) == false) {
+    if (do_merge_using_payload(db[1], db[2], false, true) == false) {
         goto finalize;
     }
     
-    if (do_merge_values(db[2], db[0], false) == false) {
+    if (do_merge_using_payload(db[2], db[0], false, true) == false) {
         goto finalize;
     }
     
@@ -4747,16 +5014,16 @@ bool do_test_merge_concurrent_attempts (int nclients, bool print_result, bool cl
     
     // simulate concurrent merge attempts by merging in different orders
     // first: 0->1 and 1->2 simultaneously
-    bool merge1 = do_merge_values(db[0], db[1], false);
-    bool merge2 = do_merge_values(db[1], db[2], false);
+    bool merge1 = do_merge_using_payload(db[0], db[1], false, true);
+    bool merge2 = do_merge_using_payload(db[1], db[2], false, true);
     
     if (!merge1 || !merge2) {
         printf("Concurrent merge phase 1 had issues\n");
     }
     
     // second: 2->0 and 0->1 simultaneously
-    bool merge3 = do_merge_values(db[2], db[0], false);
-    bool merge4 = do_merge_values(db[0], db[1], false);
+    bool merge3 = do_merge_using_payload(db[2], db[0], false, true);
+    bool merge4 = do_merge_using_payload(db[0], db[1], false, true);
     
     if (!merge3 || !merge4) {
         printf("Concurrent merge phase 2 had issues\n");
@@ -4824,6 +5091,287 @@ finalize:
     return result;
 }
 
+// Test with 10 clients using a simple table with composite primary key
+// Summary of the test function:
+// 1. Simple table with composite primary key: Creates a table with columns (id1, id2) as the composite primary key and (data1, data2) as non-primary key columns
+// 2. 10 database simulation: Forces exactly 10 clients regardless of the parameter passed
+// 3. CloudSync initialization: Each database initializes the cloudsync library for the test table
+// 4. Initial data: Each client inserts 3 initial rows with unique data
+// 5. Multiple operation rounds: Performs 5 rounds of operations where each client performs:
+//    - Inserts new rows (20%)
+//    - Updates local data (15%) - data inserted by the same client
+//    - Updates remote data (50%) - data inserted by other clients, tests cross-client conflicts
+//    - Deletes both local and remote data (15%) - minimal deletions to preserve data for updates
+// 6. Partial merging: After each round, clients merge with only 2-3 other clients (not all), simulating real-world scenarios where not all clients sync immediately
+// 7. Final convergence: 
+//    - Merges all changes from all clients to the first client (client 0)
+//    - Propagates the final state from client 0 to all other clients
+// 8. Verification: Compares all databases to ensure they have converged to identical final states
+bool do_test_merge_composite_pk_10_clients (int nclients, bool print_result, bool cleanup_databases) {
+    sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
+    bool result = false;
+    int rc = SQLITE_OK;
+    const char *table_name = "simple_composite_test";
+    
+    memset(db, 0, sizeof(sqlite3 *) * MAX_SIMULATED_CLIENTS);
+    if (nclients >= MAX_SIMULATED_CLIENTS) {
+        nclients = MAX_SIMULATED_CLIENTS;
+        printf("Number of test merge reduced to %d clients\n", MAX_SIMULATED_CLIENTS);
+    } else if (nclients < 2) {
+        nclients = 2;
+        printf("Number of test merge increased to %d clients\n", 2);
+    }
+    
+    // Force to 10 clients for this specific test
+    nclients = 10;
+    
+    // create databases and tables
+    time_t timestamp = time(NULL);
+    int saved_counter = test_counter++;
+    for (int i = 0; i < nclients; ++i) {
+        db[i] = do_create_database_file_v2(i, timestamp, saved_counter, true);
+        if (db[i] == false) return false;
+        
+        // Create simple table with composite primary key (id1, id2) and two non-pk columns (data1, data2)
+        char *sql = sqlite3_mprintf("CREATE TABLE %s (id1 INTEGER NOT NULL, id2 TEXT NOT NULL, data1 TEXT, data2 INTEGER, PRIMARY KEY(id1, id2));", table_name);
+        rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+        sqlite3_free(sql);
+        if (rc != SQLITE_OK) goto finalize;
+        
+        // Initialize cloudsync for the table
+        sql = sqlite3_mprintf("SELECT cloudsync_init('%s', 'cls', 1);", table_name);
+        rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+        sqlite3_free(sql);
+        if (rc != SQLITE_OK) goto finalize;
+    }
+    
+    if (print_result) printf("Created %d databases with composite primary key table '%s'\n", nclients, table_name);
+    
+    // Insert initial data in each client
+    for (int i = 0; i < nclients; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            char *sql = sqlite3_mprintf("INSERT INTO %s (id1, id2, data1, data2) VALUES (%d, 'client%d_row%d', 'initial_data_%d_%d', %d);", 
+                                       table_name, i * 100 + j, i, j, i, j, i * 10 + j);
+            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+            sqlite3_free(sql);
+            if (rc != SQLITE_OK) goto finalize;
+        }
+    }
+    
+    if (print_result) printf("Inserted initial data in all clients\n");
+    
+    // Perform various operations across clients in multiple rounds
+    for (int round = 0; round < 20; ++round) {
+        if (print_result) printf("Starting round %d of operations\n", round + 1);
+        
+        // Each client performs different operations (favoring remote data operations for better conflict testing)
+        for (int i = 0; i < nclients; ++i) {
+            // Weighted operation selection: focus on updates, minimal deletes
+            int operation_selector = (i * 7 + round * 3) % 20;
+            int operation;
+            
+            if (operation_selector < 4) {
+                operation = 0; // INSERT (20%)
+            } else if (operation_selector < 7) {
+                operation = 1; // UPDATE local data (15%)
+            } else if (operation_selector < 17) {
+                operation = 2; // UPDATE remote data (50%)
+            } else {
+                operation = 3; // DELETE (15% - reduced from 30%)
+            }
+            
+            switch (operation) {
+                case 0: // INSERT
+                    {
+                        char *sql = sqlite3_mprintf("INSERT INTO %s (id1, id2, data1, data2) VALUES (%d, 'round%d_client%d', 'new_data_%d_%d', %d);", 
+                                                   table_name, 1000 + round * 100 + i, round, i, round, i, round * 100 + i);
+                        rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                        sqlite3_free(sql);
+                        if (rc != SQLITE_OK && rc != SQLITE_CONSTRAINT) {
+                            printf("Insert failed on client %d: %s\n", i, sqlite3_errmsg(db[i]));
+                        }
+                    }
+                    break;
+                    
+                case 1: // UPDATE local data (more aggressive targeting)
+                    {
+                        // Try multiple approaches to find rows to update
+                        char *sql;
+                        int updated_rows = 0;
+                        
+                        // First try: update rows originally from this client
+                        sql = sqlite3_mprintf("UPDATE %s SET data1 = 'updated_local_round%d_client%d', data2 = %d WHERE id1 BETWEEN %d AND %d;",
+                                             table_name, round, i, round * 1000 + i, i * 100, (i + 1) * 100 - 1);
+                        rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                        sqlite3_free(sql);
+                        updated_rows += sqlite3_changes(db[i]);
+                        
+                        // Second try: if no rows updated, target any available rows
+                        if (updated_rows == 0) {
+                            sql = sqlite3_mprintf("UPDATE %s SET data1 = 'updated_local_round%d_client%d_any', data2 = %d WHERE rowid = (SELECT rowid FROM %s LIMIT 1 OFFSET %d);",
+                                                 table_name, round, i, round * 1000 + i, table_name, i % 10);
+                            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                            sqlite3_free(sql);
+                            updated_rows += sqlite3_changes(db[i]);
+                        }
+                        
+                        if (rc != SQLITE_OK) {
+                            printf("Update local data failed on client %d: %s\n", i, sqlite3_errmsg(db[i]));
+                        } else if (print_result && updated_rows > 0) {
+                            printf("Client %d updated %d local rows in round %d\n", i, updated_rows, round + 1);
+                        }
+                    }
+                    break;
+                    
+                case 2: // UPDATE remote data (more aggressive - creates conflicts)
+                    {
+                        int target_client = (i + 1 + round) % nclients; // Vary target client
+                        char *sql;
+                        int updated_rows = 0;
+                        
+                        // First try: update rows from target client's range
+                        sql = sqlite3_mprintf("UPDATE %s SET data1 = 'updated_remote_round%d_client%d_targeting%d', data2 = %d WHERE id1 BETWEEN %d AND %d;",
+                                             table_name, round, i, target_client, round * 2000 + i, target_client * 100, (target_client + 1) * 100 - 1);
+                        rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                        sqlite3_free(sql);
+                        updated_rows += sqlite3_changes(db[i]);
+                        
+                        // Second try: if no rows updated, target any rows not from current client
+                        if (updated_rows == 0) {
+                            sql = sqlite3_mprintf("UPDATE %s SET data1 = 'updated_remote_round%d_client%d_any', data2 = %d WHERE id1 NOT BETWEEN %d AND %d LIMIT 2;",
+                                                 table_name, round, i, round * 2000 + i, i * 100, (i + 1) * 100 - 1);
+                            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                            sqlite3_free(sql);
+                            updated_rows += sqlite3_changes(db[i]);
+                        }
+                        
+                        // Third try: if still no updates, target any available rows
+                        if (updated_rows == 0) {
+                            sql = sqlite3_mprintf("UPDATE %s SET data1 = 'updated_remote_round%d_client%d_fallback', data2 = %d WHERE rowid IN (SELECT rowid FROM %s LIMIT 2 OFFSET %d);",
+                                                 table_name, round, i, round * 2000 + i, table_name, (i + round) % 10);
+                            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                            sqlite3_free(sql);
+                            updated_rows += sqlite3_changes(db[i]);
+                        }
+                        
+                        if (rc != SQLITE_OK) {
+                            printf("Update remote data failed on client %d targeting client %d: %s\n", i, target_client, sqlite3_errmsg(db[i]));
+                        } else if (print_result && updated_rows > 0) {
+                            printf("Client %d updated %d remote rows in round %d\n", i, updated_rows, round + 1);
+                        }
+                    }
+                    break;
+                    
+                case 3: // DELETE (favoring remote data deletion)
+                    {
+                        // 80% chance to delete remote data, 20% chance to delete local data
+                        if ((i + round) % 5 == 0) {
+                            // Delete local data (20% of delete operations)
+                            char *sql = sqlite3_mprintf("DELETE FROM %s WHERE id1 = %d AND id2 = 'client%d_row1';", 
+                                                       table_name, i * 100 + 1, i);
+                            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                            sqlite3_free(sql);
+                            if (rc != SQLITE_OK) {
+                                printf("Delete local data failed on client %d: %s\n", i, sqlite3_errmsg(db[i]));
+                            }
+                        } else {
+                            // Delete remote data (80% of delete operations)
+                            int target_client = (i + 2 + round) % nclients; // Vary target client
+                            char *sql = sqlite3_mprintf("DELETE FROM %s WHERE id1 = %d AND id2 = 'client%d_row0';", 
+                                                       table_name, target_client * 100, target_client);
+                            rc = sqlite3_exec(db[i], sql, NULL, NULL, NULL);
+                            sqlite3_free(sql);
+                            if (rc != SQLITE_OK) {
+                                printf("Delete remote data failed on client %d targeting client %d: %s\n", i, target_client, sqlite3_errmsg(db[i]));
+                            }
+                        }
+                    }
+                    break;
+            }
+        }
+        
+        // Partial merge: each client merges with 2-3 other random clients (not all)
+        for (int i = 0; i < nclients; ++i) {
+            int merge_targets = 2 + (round % 2); // 2 or 3 targets
+            for (int j = 0; j < merge_targets; ++j) {
+                int target = (i + j + 1 + round) % nclients;
+                if (target != i) {
+                    if (do_merge_using_payload(db[i], db[target], true, true) == false) {
+                        if (print_result) printf("Partial merge failed from client %d to %d\n", i, target);
+                        goto finalize;
+                    }
+                }
+            }
+        }
+        
+        if (print_result) printf("Completed round %d operations and partial merges\n", round + 1);
+    }
+    
+    // Final convergence: merge all changes to client 0
+    if (print_result) printf("Starting final convergence to client 0\n");
+    for (int i = 1; i < nclients; ++i) {
+        if (do_merge_using_payload(db[i], db[0], true, true) == false) {
+            if (print_result) printf("Final merge to client 0 failed from client %d\n", i);
+            goto finalize;
+        }
+    }
+    
+    // Merge changes from client 0 to all other clients
+    if (print_result) printf("Propagating final state from client 0 to all other clients\n");
+    for (int i = 1; i < nclients; ++i) {
+        if (do_merge_using_payload(db[0], db[i], false, true) == false) {
+            if (print_result) printf("Final merge from client 0 failed to client %d\n", i);
+            goto finalize;
+        }
+    }
+    
+    // Verify all databases have converged to the same state
+    if (print_result) printf("Verifying convergence across all clients\n");
+    char *verification_sql = sqlite3_mprintf("SELECT * FROM %s ORDER BY id1, id2;", table_name);
+    for (int i = 1; i < nclients; ++i) {
+        if (do_compare_queries(db[0], verification_sql, db[i], verification_sql, -1, -1, print_result) == false) {
+            if (print_result) printf("Convergence verification failed: client 0 vs client %d\n", i);
+            sqlite3_free(verification_sql);
+            goto finalize;
+        }
+    }
+    sqlite3_free(verification_sql);
+    
+    if (print_result) {
+        printf("\nFinal converged state:\n");
+        char *display_sql = sqlite3_mprintf("SELECT * FROM %s ORDER BY id1, id2;", table_name);
+        do_query(db[0], display_sql, NULL);
+        sqlite3_free(display_sql);
+    }
+    
+    result = true;
+    
+finalize:
+    for (int i = 0; i < nclients; ++i) {
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) {
+            printf("do_test_merge_composite_pk_10_clients error: %s\n", sqlite3_errmsg(db[i]));
+        }
+        if (db[i]) {
+            if (sqlite3_get_autocommit(db[i]) == 0) {
+                result = false;
+                printf("do_test_merge_composite_pk_10_clients error: db %d is in transaction\n", i);
+            }
+            
+            int counter = close_db_v2(db[i]);
+            if (counter > 0) {
+                result = false;
+                printf("do_test_merge_composite_pk_10_clients error: db %d has %d unterminated statements\n", i, counter);
+            }
+        }
+        if (cleanup_databases) {
+            char buf[256];
+            do_build_database_path(buf, i, timestamp, saved_counter);
+            file_delete_internal(buf);
+        }
+    }
+    return result;
+}
+
 bool do_test_prikey (int nclients, bool print_result, bool cleanup_databases) {
     sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
     bool result = false;
@@ -4842,7 +5390,7 @@ bool do_test_prikey (int nclients, bool print_result, bool cleanup_databases) {
     time_t timestamp = time(NULL);
     int saved_counter = test_counter;
     for (int i=0; i<nclients; ++i) {
-        db[i] = do_create_database_file(i, timestamp, test_counter++);
+        db[i] = do_create_database_file_v2(i, timestamp, test_counter++, true);
         if (db[i] == false) return false;
         
         const char *sql = "CREATE TABLE foo (a INTEGER PRIMARY KEY NOT NULL, b INTEGER);";
@@ -4880,7 +5428,7 @@ bool do_test_prikey (int nclients, bool print_result, bool cleanup_databases) {
     
     // send local changes to client1
     for (int i=1; i<nclients; ++i) {
-        if (do_merge_values(db[i], db[0], true) == false) {
+        if (do_merge_using_payload(db[i], db[0], true, true) == false) {
             goto finalize;
         }
     }
@@ -4935,7 +5483,7 @@ bool do_test_double_init(int nclients, bool cleanup_databases) {
     if (do_augment_tables(table_mask, db[0], table_algo_crdt_cls) == false) goto finalize;
     if (sqlite3_exec(db[0], "SELECT cloudsync_terminate();", NULL, NULL, NULL) != SQLITE_OK) goto finalize;
 
-    db[1] = do_create_database_file(0, timestamp, test_counter);
+    db[1] = do_create_database_file(1, timestamp, test_counter);
 
     result = true;
     
@@ -5416,6 +5964,11 @@ int main(int argc, const char * argv[]) {
     result += test_report("Merge Test 3:", do_test_merge_2(3, TEST_NOCOLS, print_result, cleanup_databases));
     result += test_report("Merge Test 4:", do_test_merge_4(2, print_result, cleanup_databases));
     result += test_report("Merge Test 5:", do_test_merge_5(2, print_result, cleanup_databases, false));
+    result += test_report("Merge Test db_version 1:", do_test_merge_check_db_version(2, print_result, cleanup_databases, true, false));
+    result += test_report("Merge Test db_version 1-cb:", do_test_merge_check_db_version(2, print_result, cleanup_databases, true, true));
+    result += test_report("Merge Test db_version 2:", do_test_merge_check_db_version_2(2, print_result, cleanup_databases, true, false));
+    result += test_report("Merge Test db_version 2-cb:", do_test_merge_check_db_version_2(2, print_result, cleanup_databases, true, true));
+    result += test_report("Merge Test Insert Changes", do_test_insert_cloudsync_changes(print_result, cleanup_databases));
     result += test_report("Merge Alter Schema 1:", do_test_merge_alter_schema_1(2, print_result, cleanup_databases, false));
     result += test_report("Merge Alter Schema 2:", do_test_merge_alter_schema_2(2, print_result, cleanup_databases, false));
     result += test_report("Merge Two Tables Test:", do_test_merge_two_tables(2, print_result, cleanup_databases));
@@ -5437,6 +5990,7 @@ int main(int argc, const char * argv[]) {
     result += test_report("Merge Index Consistency:", do_test_merge_index_consistency(2, print_result, cleanup_databases));
     result += test_report("Merge JSON Columns:", do_test_merge_json_columns(2, print_result, cleanup_databases));
     result += test_report("Merge Concurrent Attempts:", do_test_merge_concurrent_attempts(3, print_result, cleanup_databases));
+    result += test_report("Merge Composite PK 10 Clients:", do_test_merge_composite_pk_10_clients(10, print_result, cleanup_databases));
     result += test_report("PriKey NULL Test:", do_test_prikey(2, print_result, cleanup_databases));
     result += test_report("Test Double Init:", do_test_double_init(2, cleanup_databases));
     
