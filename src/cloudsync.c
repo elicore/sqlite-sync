@@ -2151,19 +2151,12 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         buffer = (const char *)clone;
     }
     
-    // apply payload inside a transaction
     sqlite3 *db = sqlite3_context_db_handle(context);
-    int rc = sqlite3_exec(db, "SAVEPOINT cloudsync_payload_apply;", NULL, NULL, NULL);
-    if (rc != SQLITE_OK) {
-        dbutils_context_result_error(context, "Error on cloudsync_payload_apply: unable to start a transaction (%s).", sqlite3_errmsg(db));
-        if (clone) cloudsync_memory_free(clone);
-        return -1;
-    }
     
     // precompile the insert statement
     sqlite3_stmt *vm = NULL;
     const char *sql = "INSERT INTO cloudsync_changes(tbl, pk, col_name, col_value, col_version, db_version, site_id, cl, seq) VALUES (?,?,?,?,?,?,?,?,?);";
-    rc = sqlite3_prepare(db, sql, -1, &vm, NULL);
+    int rc = sqlite3_prepare(db, sql, -1, &vm, NULL);
     if (rc != SQLITE_OK) {
         dbutils_context_result_error(context, "Error on cloudsync_payload_apply: error while compiling SQL statement (%s).", sqlite3_errmsg(db));
         if (clone) cloudsync_memory_free(clone);
@@ -2173,6 +2166,8 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
     // process buffer, one row at a time
     uint16_t ncols = header.ncols;
     uint32_t nrows = header.nrows;
+    int64_t last_payload_db_version = -1;
+    bool in_savepoint = false;
     int dbversion = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_CHECK_DBVERSION);
     int seq = dbutils_settings_get_int_value(db, CLOUDSYNC_KEY_CHECK_SEQ);
     cloudsync_pk_decode_bind_context decoded_context = {.vm = vm};
@@ -2184,10 +2179,44 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         pk_decode((char *)buffer, blen, ncols, &seek, cloudsync_pk_decode_bind_callback, &decoded_context);
         // n is the pk_decode return value, I don't think I should assert here because in any case the next sqlite3_step would fail
         // assert(n == ncols);
-        
+                
         bool approved = true;
         if (payload_apply_callback) approved = payload_apply_callback(&payload_apply_xdata, &decoded_context, db, data, CLOUDSYNC_PAYLOAD_APPLY_WILL_APPLY, SQLITE_OK);
+        
+        // Apply consecutive rows with the same db_version inside a transaction if no
+        // transaction has already been opened.
+        // The user may have already opened a transaction before applying the payload,
+        // and the `payload_apply_callback` may have already opened a savepoint.
+        // Nested savepoints work, but overlapping savepoints could alter the expected behavior.
+        // This savepoint ensures that the db_version value remains consistent for all
+        // rows with the same original db_version in the payload.
 
+        bool db_version_changed = (last_payload_db_version != decoded_context.db_version);
+
+        // Release existing savepoint if db_version changed
+        if (in_savepoint && db_version_changed) {
+            rc = sqlite3_exec(db, "RELEASE cloudsync_payload_apply;", NULL, NULL, NULL);
+            if (rc != SQLITE_OK) {
+                dbutils_context_result_error(context, "Error on cloudsync_payload_apply: unable to release a savepoint (%s).", sqlite3_errmsg(db));
+                if (clone) cloudsync_memory_free(clone);
+                return -1;
+            }
+            in_savepoint = false;
+        }
+
+        // Start new savepoint if needed
+        bool in_transaction = sqlite3_get_autocommit(db) != true;
+        if (!in_transaction && db_version_changed) {
+            rc = sqlite3_exec(db, "SAVEPOINT cloudsync_payload_apply;", NULL, NULL, NULL);
+            if (rc != SQLITE_OK) {
+                dbutils_context_result_error(context, "Error on cloudsync_payload_apply: unable to start a transaction (%s).", sqlite3_errmsg(db));
+                if (clone) cloudsync_memory_free(clone);
+                return -1;
+            }
+            last_payload_db_version = decoded_context.db_version;
+            in_savepoint = true;
+        }
+        
         if (approved) {
             rc = sqlite3_step(vm);
             if (rc != SQLITE_DONE) {
@@ -2203,10 +2232,14 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         blen -= seek;
         stmt_reset(vm);
     }
+    
+    if (in_savepoint) {
+        sql = "RELEASE cloudsync_payload_apply;";
+        int rc1 = sqlite3_exec(db, sql, NULL, NULL, NULL);
+        if (rc1 != SQLITE_OK) rc = rc1;
+    }
 
     char *lasterr = (rc != SQLITE_OK && rc != SQLITE_DONE) ? cloudsync_string_dup(sqlite3_errmsg(db), false) : NULL;
-    sql = (lasterr) ? "ROLLBACK TO cloudsync_payload_apply;" : "RELEASE cloudsync_payload_apply;";
-    sqlite3_exec(db, sql, NULL, NULL, NULL);
     
     if (payload_apply_callback) {
         payload_apply_callback(&payload_apply_xdata, &decoded_context, db, data, CLOUDSYNC_PAYLOAD_APPLY_CLEANUP, rc);
