@@ -350,8 +350,10 @@ AAR_ARM = packages/android/src/main/jniLibs/arm64-v8a/
 AAR_X86 = packages/android/src/main/jniLibs/x86_64/
 aar:
 	mkdir -p $(AAR_ARM) $(AAR_X86)
+	rm -rf $(CURL_DIR)/android $(CURL_DIR)/src
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=arm64-v8a
 	mv $(DIST_DIR)/cloudsync.so $(AAR_ARM)
+	rm -rf $(CURL_DIR)/android $(CURL_DIR)/src
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=x86_64
 	mv $(DIST_DIR)/cloudsync.so $(AAR_X86)
 	cd packages/android && ./gradlew clean assembleRelease
