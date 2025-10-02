@@ -2800,7 +2800,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2906,7 +2906,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2980,7 +2980,7 @@ finalize:
     if (cleanup_databases) {
         char buf[256];
         do_build_database_path(buf, 0, timestamp, saved_counter);
-        file_delete(buf);
+        file_delete_internal(buf);
     }
     return result;
 }
