@@ -150,9 +150,9 @@ void cloudsync_rowid_decode (sqlite3_int64 rowid, sqlite3_int64 *db_version, sql
 
 // available only on Desktop OS
 #ifdef CLOUDSYNC_DESKTOP_OS
-bool file_delete (const char *path);
-char *file_read (const char *path, sqlite3_int64 *len);
-bool file_write (const char *path, const char *buffer, size_t len);
+bool cloudsync_file_delete (const char *path);
+char *cloudsync_file_read (const char *path, sqlite3_int64 *len);
+bool cloudsync_file_write (const char *path, const char *buffer, size_t len);
 #endif
 
 #endif

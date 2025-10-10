@@ -2344,7 +2344,7 @@ void cloudsync_payload_save (sqlite3_context *context, int argc, sqlite3_value *
     
     // retrieve full path to file
     const char *path = (const char *)sqlite3_value_text(argv[0]);
-    file_delete(path);
+    cloudsync_file_delete(path);
     
     // retrieve payload
     char *blob = NULL;
@@ -2357,7 +2357,7 @@ void cloudsync_payload_save (sqlite3_context *context, int argc, sqlite3_value *
     if (blob == NULL || blob_size == 0) return;
     
     // write payload to file
-    bool res = file_write(path, blob, (size_t)blob_size);
+    bool res = cloudsync_file_write(path, blob, (size_t)blob_size);
     sqlite3_free(blob);
     
     if (res == false) {
@@ -2394,7 +2394,7 @@ void cloudsync_payload_load (sqlite3_context *context, int argc, sqlite3_value *
     const char *path = (const char *)sqlite3_value_text(argv[0]);
     
     sqlite3_int64 payload_size = 0;
-    char *payload = file_read(path, &payload_size);
+    char *payload = cloudsync_file_read(path, &payload_size);
     if (!payload) {
         if (payload_size == -1) sqlite3_result_error(context, "Unable to read payload from file path.", -1);
         if (payload) cloudsync_memory_free(payload);

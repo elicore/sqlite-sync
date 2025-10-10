@@ -295,7 +295,7 @@ uint64_t fnv1a_hash (const char *data, size_t len) {
 
 #ifdef CLOUDSYNC_DESKTOP_OS
 
-bool file_delete (const char *path) {
+bool cloudsync_file_delete (const char *path) {
     #ifdef _WIN32
     return DeleteFileA(path);
     #else
@@ -303,7 +303,7 @@ bool file_delete (const char *path) {
     #endif
 }
 
-static bool file_read_all (int fd, char *buf, size_t n) {
+static bool cloudsync_file_read_all (int fd, char *buf, size_t n) {
     size_t off = 0;
     while (off < n) {
         #ifdef _WIN32
@@ -322,7 +322,7 @@ static bool file_read_all (int fd, char *buf, size_t n) {
     return true;
 }
 
-char *file_read (const char *path, sqlite3_int64 *len) {
+char *cloudsync_file_read (const char *path, sqlite3_int64 *len) {
     int fd = -1;
     char *buffer = NULL;
 
@@ -352,7 +352,7 @@ char *file_read (const char *path, sqlite3_int64 *len) {
     if (!buffer) goto abort_read;
     buffer[sz] = '\0';
 
-    if (!file_read_all(fd, buffer, sz)) goto abort_read;
+    if (!cloudsync_file_read_all(fd, buffer, sz)) goto abort_read;
     if (len) *len = sz;
     
     file_close(fd);
@@ -366,7 +366,7 @@ abort_read:
     return NULL;
 }
 
-int file_create (const char *path) {
+int cloudsync_file_create (const char *path) {
     #ifdef _WIN32
     int flags = _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY;
     int mode  = _S_IWRITE; // Windows ignores most POSIX perms
@@ -378,7 +378,7 @@ int file_create (const char *path) {
     #endif
 }
 
-static bool file_write_all (int fd, const char *buf, size_t n) {
+static bool cloudsync_file_write_all (int fd, const char *buf, size_t n) {
     size_t off = 0;
     while (off < n) {
         #ifdef _WIN32
@@ -397,11 +397,11 @@ static bool file_write_all (int fd, const char *buf, size_t n) {
     return true;
 }
 
-bool file_write (const char *path, const char *buffer, size_t len) {
-    int fd = file_create(path);
+bool cloudsync_file_write (const char *path, const char *buffer, size_t len) {
+    int fd = cloudsync_file_create(path);
     if (fd < 0) return false;
     
-    bool res = file_write_all(fd, buffer, len);
+    bool res = cloudsync_file_write_all(fd, buffer, len);
     
     file_close(fd);
     return res;
