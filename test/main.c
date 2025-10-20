@@ -345,7 +345,11 @@ void* worker(void* arg) {
     if(test_report(description, result)){
         printf("PEER %d FAIL.\n", thread_id+1);
         // Return error code instead of exiting entire process
+#ifdef _WIN32
+        return (DWORD)(intptr_t)(thread_id+1);
+#else
         return (void*)(intptr_t)(thread_id+1);
+#endif
     }
 
 #ifdef _WIN32
