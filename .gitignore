@@ -49,3 +49,14 @@ jniLibs/
 # System
 .DS_Store
 Thumbs.db
+
+# Custom server examples
+examples/custom-server/build/*
+!examples/custom-server/build/.gitkeep
+examples/custom-server/**/*.dSYM/
+examples/custom-server/**/*.db
+examples/custom-server/**/*.log
+examples/custom-server/server
+examples/custom-server/server_simple
+examples/custom-server/client
+examples/custom-server/client_interactive
