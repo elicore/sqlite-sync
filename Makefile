@@ -86,7 +86,7 @@ else ifeq ($(PLATFORM),macos)
 	STRIP = strip -x -S $@
 else ifeq ($(PLATFORM),android)
 	ifndef ARCH # Set ARCH to find Android NDK's Clang compiler, the user should set the ARCH
-		$(error "Android ARCH must be set to ARCH=x86_64 or ARCH=arm64-v8a")
+		$(error "Android ARCH must be set to ARCH=x86_64, ARCH=arm64-v8a, or ARCH=armeabi-v7a")
 	endif
 	ifndef ANDROID_NDK # Set ANDROID_NDK path to find android build tools; e.g. on MacOS: export ANDROID_NDK=/Users/username/Library/Android/sdk/ndk/25.2.9519653
 		$(error "Android NDK must be set")
@@ -97,11 +97,17 @@ else ifeq ($(PLATFORM),android)
 
 	ifneq (,$(filter $(ARCH),arm64 arm64-v8a))
 		override ARCH := aarch64
+		ANDROID_ABI := android26
+	else ifeq ($(ARCH),armeabi-v7a)
+		override ARCH := armv7a
+		ANDROID_ABI := androideabi26
+	else
+		ANDROID_ABI := android26
 	endif
 
 	OPENSSL := $(BIN)/../sysroot/usr/include/openssl
-	CC = $(BIN)/$(ARCH)-linux-android26-clang
-	CURL_CONFIG = --host $(ARCH)-$(HOST)-android26 --with-openssl=$(BIN)/../sysroot/usr LIBS="-lssl -lcrypto" AR=$(BIN)/llvm-ar AS=$(BIN)/llvm-as CC=$(CC) CXX=$(BIN)/$(ARCH)-linux-android26-clang++ LD=$(BIN)/ld RANLIB=$(BIN)/llvm-ranlib STRIP=$(BIN)/llvm-strip
+	CC = $(BIN)/$(ARCH)-linux-$(ANDROID_ABI)-clang
+	CURL_CONFIG = --host $(ARCH)-linux-$(ANDROID_ABI) --with-openssl=$(BIN)/../sysroot/usr LIBS="-lssl -lcrypto" AR=$(BIN)/llvm-ar AS=$(BIN)/llvm-as CC=$(CC) CXX=$(BIN)/$(ARCH)-linux-$(ANDROID_ABI)-clang++ LD=$(BIN)/ld RANLIB=$(BIN)/llvm-ranlib STRIP=$(BIN)/llvm-strip
 	TARGET := $(DIST_DIR)/cloudsync.so
 	LDFLAGS += -shared -lcrypto -lssl
 	STRIP = $(BIN)/llvm-strip --strip-unneeded $@
@@ -202,7 +208,7 @@ $(OPENSSL):
 	git clone https://github.com/openssl/openssl.git $(CURL_DIR)/src/openssl
 
 	cd $(CURL_DIR)/src/openssl && \
-	./Configure android-$(if $(filter aarch64,$(ARCH)),arm64,$(ARCH)) \
+	./Configure android-$(if $(filter aarch64,$(ARCH)),arm64,$(if $(filter armv7a,$(ARCH)),arm,$(ARCH))) \
 		--prefix=$(BIN)/../sysroot/usr \
 		no-shared no-unit-test \
 		-D__ANDROID_API__=26 && \
@@ -353,14 +359,18 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 
 xcframework: $(DIST_DIR)/CloudSync.xcframework
 
-AAR_ARM = packages/android/src/main/jniLibs/arm64-v8a/
+AAR_ARM64 = packages/android/src/main/jniLibs/arm64-v8a/
+AAR_ARM = packages/android/src/main/jniLibs/armeabi-v7a/
 AAR_X86 = packages/android/src/main/jniLibs/x86_64/
 AAR_USR = $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/
 AAR_CLEAN = rm -rf $(CURL_DIR)/android $(AAR_USR)bin/openssl $(AAR_USR)include/openssl $(AAR_USR)lib/libssl.a $(AAR_USR)lib/libcrypto.a $(AAR_USR)lib/ossl-modules
 aar:
-	mkdir -p $(AAR_ARM) $(AAR_X86)
+	mkdir -p $(AAR_ARM64) $(AAR_ARM) $(AAR_X86)
 	$(AAR_CLEAN)
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=arm64-v8a
+	mv $(DIST_DIR)/cloudsync.so $(AAR_ARM64)
+	$(AAR_CLEAN)
+	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=armeabi-v7a
 	mv $(DIST_DIR)/cloudsync.so $(AAR_ARM)
 	$(AAR_CLEAN)
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=x86_64
@@ -386,7 +396,7 @@ help:
 	@echo "  linux (default on Linux)"
 	@echo "  macos (default on macOS - can be compiled with native network support)"
 	@echo "  windows (default on Windows)"
-	@echo "  android (needs ARCH to be set to x86_64 or arm64-v8a and ANDROID_NDK to be set)"
+	@echo "  android (needs ARCH to be set to x86_64, arm64-v8a, or armeabi-v7a and ANDROID_NDK to be set)"
 	@echo "  ios (only on macOS - can be compiled with native network support)"
 	@echo "  ios-sim (only on macOS - can be compiled with native network support)"
 	@echo ""
